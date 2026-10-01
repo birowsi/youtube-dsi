@@ -1,0 +1,323 @@
+// YouTubeDSi HQ2: steady-picture YDS3 stream + DSi-style lower screen.
+// Derived from the hardware-verified HQ client (client/source/main.c).
+// Boot, SD config, NTR Wi-Fi worker and socket code are kept as they were;
+// only the presentation layer and the PLAY3/SEARCH3 requests are new.
+// Platform setup follows BlocksDS CC0 Wi-Fi and Maxmod examples.
+#include <nds.h>
+#include <dswifi9.h>
+#include <maxmod9.h>
+#include <fat.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include "hq_player.h"
+#include "ui.h"
+
+#ifndef QUALITY_STREAM
+#error "HQ2 is a DSi-mode quality build"
+#endif
+
+static char host[64] = "192.168.0.4";
+static int port = 8767;
+static char error_text[440];
+static char ids[8][12], titles[8][101];
+static uint8_t title_bitmaps[8][UI_TITLE_BYTES];
+static int results, selected, have_bitmaps;
+static void tick(void);
+
+static volatile unsigned wifi_finished, wifi_connected, wifi_status, wifi_cancel, wifi_saved_aps;
+
+static int wifi_worker(void *unused) {
+    (void)unused;
+    // Keep DSi execution/memory; select only the legacy radio interface.
+    if (Wifi_InitDefault(INIT_ONLY | WIFI_DS_MODE_ONLY)) {
+        wifi_saved_aps = Wifi_GetData(WIFIGETDATA_NUMWFCAPS, 0, NULL);
+        if (!wifi_saved_aps) { wifi_finished = 1; return 0; }
+        Wifi_AutoConnect();
+        for (unsigned frames = 0; frames < 40 * 60 && !wifi_cancel; frames++) {
+            wifi_status = Wifi_AssocStatus();
+            if (wifi_status == ASSOCSTATUS_ASSOCIATED) {
+                wifi_connected = 1;
+                break;
+            }
+            if (wifi_status == ASSOCSTATUS_CANNOTCONNECT) break;
+            cothread_yield_irq(IRQ_VBLANK);
+        }
+    }
+    if (!wifi_connected) Wifi_DisconnectAP();
+    wifi_finished = 1;
+    return 0;
+}
+
+static int connect_saved_wifi(void) {
+    if (cothread_create(wifi_worker, NULL, 8192, COTHREAD_DETACHED) < 0) return 0;
+    unsigned frames = 0;
+    char line[48];
+    while (!wifi_finished) {
+        tick();
+        if (keysDown() & KEY_B) wifi_cancel = 1;
+        if (frames++ % 30 == 0) {
+            snprintf(line, sizeof(line), "%s  -  %u s",
+                     wifi_status <= ASSOCSTATUS_CANNOTCONNECT ?
+                     ASSOCSTATUS_STRINGS[wifi_status] : "Starting", frames / 60);
+            ui_status("YouTube DSi", "Connecting to saved Wi-Fi", line, "B: Cancel");
+        }
+    }
+    return wifi_connected;
+}
+
+// lwIP runs in a cooperative thread; BIOS waits alone starve network work.
+static void tick(void) { cothread_yield_irq(IRQ_VBLANK); scanKeys(); ui_top_tick(); }
+
+static void wait_a(void) {
+    do { tick(); } while (!(keysDown() & (KEY_A | KEY_TOUCH)));
+}
+
+static void show_error(void) {
+    ui_error(error_text[0] ? error_text : "Request failed");
+    wait_a();
+}
+
+static void load_config(void) {
+    if (!fatInitDefault()) return;
+    const char *paths[] = {"sd:/youtube-dsi.ini", "/youtube-dsi.ini"};
+    FILE *file = NULL;
+    for (unsigned i = 0; i < 2 && !file; i++) file = fopen(paths[i], "r");
+    if (!file) return;
+    char line[128];
+    while (fgets(line, sizeof(line), file)) {
+        char value[64]; int number;
+        if (sscanf(line, "host=%63s", value) == 1) snprintf(host, sizeof(host), "%s", value);
+        // Keep the working legacy relay/config unchanged on port 8765.
+        if (sscanf(line, "quality_port=%d", &number) == 1 && number > 0 && number < 65536) port = number;
+    }
+    fclose(file);
+}
+
+static int open_request(const char *command, const char *title) {
+    error_text[0] = 0;
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+        snprintf(error_text, sizeof(error_text), "Enter an IPv4 address for the PC."); return -1;
+    }
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) { snprintf(error_text, sizeof(error_text), "socket error %d", errno); return -1; }
+    ui_status(title, "Connecting to the PC...", host, "B: Cancel");
+    // libnds/lwIP socket operations yield internally while waiting.
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        snprintf(error_text, sizeof(error_text),
+                 "Can't reach %s:%d. Check that start-quality-server.cmd is running and the firewall allows it.",
+                 host, port);
+        close(fd); return -1;
+    }
+    unsigned length = strlen(command), done = 0;
+    while (done < length) {
+        int n = send(fd, command + done, length - done, 0);
+        if (n <= 0) { close(fd); snprintf(error_text, sizeof(error_text), "Send failed"); return -1; }
+        done += n;
+    }
+    ui_status(title, "Waiting for the PC...", NULL, "B: Cancel");
+    int opt = 1;
+    ioctl(fd, FIONBIO, &opt);
+    return fd;
+}
+
+static int receive_bytes(int fd, void *data, unsigned size) {
+    unsigned used = 0, idle = 0;
+    while (used < size) {
+        int n = recv(fd, (uint8_t *)data + used, size - used, 0);
+        if (n > 0) { used += n; idle = 0; continue; }
+        if (n == 0) { snprintf(error_text, sizeof(error_text), "The PC closed the connection."); return 0; }
+        if (errno != EAGAIN && errno != EWOULDBLOCK) {
+            snprintf(error_text, sizeof(error_text), "Receive failed: %d", errno); return 0;
+        }
+        tick();
+        if (keysDown() & KEY_B) { snprintf(error_text, sizeof(error_text), "Cancelled"); return 0; }
+        if (++idle > 180 * 60) { snprintf(error_text, sizeof(error_text), "The PC did not answer."); return 0; }
+    }
+    return 1;
+}
+
+static int receive_line(int fd, char *line, unsigned size) {
+    for (unsigned i = 0; i + 1 < size; i++) {
+        if (!receive_bytes(fd, line + i, 1)) return 0;
+        if (line[i] == '\n') { line[i] = 0; return 1; }
+    }
+    snprintf(error_text, sizeof(error_text), "Response line too long"); return 0;
+}
+
+static void server_error(const char *line) {
+    if (!strncmp(line, "ERR Unknown command", 19))
+        snprintf(error_text, sizeof(error_text),
+                 "The PC relay is the old version. Close it and run start-quality-server.cmd again.");
+    else snprintf(error_text, sizeof(error_text), "%.430s", line[0] ? line : "Request failed");
+}
+
+static int search(const char *query) {
+    char command[264], line[440] = "";
+    snprintf(command, sizeof(command), "SEARCH3 %s\n", query);
+    int fd = open_request(command, "Searching");
+    if (fd < 0) return 0;
+    ui_status("Searching", "Searching YouTube...", query, "B: Cancel");
+    int ok = receive_line(fd, line, sizeof(line)), w = 0, h = 0;
+    have_bitmaps = 0;
+    if (ok && sscanf(line, "OK %d %d %d", &results, &w, &h) >= 1 && results >= 0 && results <= 8) {
+        for (int i = 0; i < results; i++) {
+            if (!receive_line(fd, line, sizeof(line))) { ok = 0; break; }
+            char *tab = strchr(line, '\t');
+            if (!tab || tab - line != 11) { ok = 0; break; }
+            *tab = 0;
+            memcpy(ids[i], line, 11); ids[i][11] = 0;
+            snprintf(titles[i], sizeof(titles[i]), "%.100s", tab + 1);
+        }
+        if (ok && w == UI_TITLE_W && h == UI_TITLE_H) {
+            for (int i = 0; i < results && ok; i++)
+                ok = receive_bytes(fd, title_bitmaps[i], UI_TITLE_BYTES);
+            have_bitmaps = ok;
+        }
+    } else if (ok) {
+        ok = 0; server_error(line);
+    }
+    close(fd);
+    selected = 0;
+    return ok;
+}
+
+static int playback(int index) {
+    char command[64], line[440] = "";
+    if (index >= 0) snprintf(command, sizeof(command), "PLAY3 %s\n", ids[index]);
+    else snprintf(command, sizeof(command), "TEST3\n");
+    int fd = open_request(command, "Now Playing");
+    if (fd < 0) return 0;
+    ui_status("Now Playing", "Preparing the stream...", "The PC is opening the video", "B: Cancel");
+    if (!receive_line(fd, line, sizeof(line)) || strcmp(line, "OK STREAM")) {
+        if (line[0]) server_error(line);
+        close(fd); return 0;
+    }
+    ui_top_stop();
+    int ok = hq_playback(fd, error_text, sizeof(error_text),
+                         index >= 0 && have_bitmaps ? title_bitmaps[index] : NULL,
+                         index >= 0 ? titles[index] : "Picture + stereo test (440 Hz left, 660 Hz right)");
+    close(fd);
+    ui_top_splash(host, port);
+    return ok;
+}
+
+// Touch press: highlight on touch-down, act on release inside the same target.
+static int touch_target(int (*hit)(int, int), int *pressed, void (*redraw)(int)) {
+    if (keysDown() & KEY_TOUCH) {
+        touchPosition t; touchRead(&t);
+        int h = hit(t.px, t.py);
+        if (h) { *pressed = h; redraw(h); }
+    }
+    if (*pressed && !(keysHeld() & KEY_TOUCH)) {
+        int fired = *pressed; *pressed = 0; redraw(0);
+        return fired;
+    }
+    return 0;
+}
+static void home_redraw(int pressed) { ui_home(host, port, pressed); }
+static int result_hit(int x, int y) { return ui_results_hit(x, y, selected, results) + 1; }
+static char last_query[240];
+static void results_redraw(int pressed) {
+    ui_results(last_query, results, selected, pressed - 1, titles, have_bitmaps ? title_bitmaps[0] : NULL);
+}
+
+static void results_loop(void) {
+    int pressed = 0;
+    results_redraw(0);
+    while (1) {
+        tick();
+        unsigned keys = keysDown();
+        int fired = touch_target(result_hit, &pressed, results_redraw);
+        if (keys & KEY_B) return;
+        int moved = 0;
+        if ((keys & KEY_UP) && selected > 0) { selected--; moved = 1; }
+        if ((keys & KEY_DOWN) && selected + 1 < results) { selected++; moved = 1; }
+        if ((keys & KEY_L) && selected >= UI_RESULTS_PER_PAGE) { selected -= UI_RESULTS_PER_PAGE; moved = 1; }
+        if ((keys & KEY_R) && results) {
+            int next = (selected / UI_RESULTS_PER_PAGE + 1) * UI_RESULTS_PER_PAGE;
+            if (next < results) { selected = next; moved = 1; }
+        }
+        if (moved) results_redraw(0);
+        int play = -1;
+        if (fired) { selected = fired - 1; play = selected; }
+        if ((keys & KEY_A) && results) play = selected;
+        if (play >= 0) {
+            if (!playback(play)) show_error();
+            results_redraw(0);
+        }
+    }
+}
+
+int main(void) {
+#ifdef HARDWARE_RUNTIME
+    // ARM7 owns 256 KB of main RAM starting here; keep ARM9 allocations below it.
+    extern char *fake_heap_end;
+    fake_heap_end = (char *)0x02d00000;
+#endif
+    defaultExceptionHandler();
+    lcdMainOnTop();
+    setBrightness(3, 0);
+    ui_init();
+    if (!isDSiMode()) {
+        ui_status("YouTube DSi", "HQ2 needs DSi mode", "Start it from TWiLight in DSi mode", "A: Exit");
+        wait_a(); return 1;
+    }
+    ui_status("YouTube DSi", "Starting...", "Video", NULL);
+    hq_video_init();
+    ui_status("YouTube DSi", "Starting...", "Reading SD settings", NULL);
+    load_config();
+    ui_top_splash(host, port);
+    int wifi_ok = connect_saved_wifi();
+    if (!wifi_ok) {
+        snprintf(error_text, sizeof(error_text),
+                 "Wi-Fi connection failed (status %u, saved compatible APs %u). Use a saved DS-compatible "
+                 "connection: Open or WEP networks.", wifi_status, wifi_saved_aps);
+        show_error(); return 1;
+    }
+    ui_status("YouTube DSi", "Starting...", "Sound", NULL);
+    mm_ds_system sys = {.mod_count=0, .samp_count=0, .mem_bank=0, .fifo_channel=FIFO_MAXMOD};
+    if (!mmInit(&sys)) { snprintf(error_text, sizeof(error_text), "Audio init failed"); show_error(); return 1; }
+    int pressed = 0;
+    ui_home(host, port, 0);
+    while (1) {
+        tick();
+        unsigned keys = keysDown();
+        int action = touch_target(ui_home_hit, &pressed, home_redraw);
+        if (keys & KEY_START) break;
+        if (keys & KEY_A) action = 1;
+        if (keys & KEY_X) action = 2;
+        if (keys & KEY_Y) action = 3;
+        if (action == 3) {
+            char edit[64];
+            snprintf(edit, sizeof(edit), "%s", host);
+            if (ui_keyboard("PC address (IPv4)", edit, sizeof(edit), tick, 0)) {
+                snprintf(host, sizeof(host), "%s", edit);
+                ui_top_splash(host, port);
+            }
+        } else if (action == 2) {
+            if (!playback(-1)) show_error();
+        } else if (action == 1) {
+            char query[240] = "";
+            snprintf(query, sizeof(query), "%s", last_query);
+            if (ui_keyboard("Search YouTube", query, sizeof(query), tick, 1)) {
+                snprintf(last_query, sizeof(last_query), "%s", query);
+                if (search(query)) results_loop();
+                else show_error();
+            }
+        }
+        if (action) ui_home(host, port, 0);
+    }
+    Wifi_DisconnectAP(); Wifi_DisableWifi();
+    return 0;
+}

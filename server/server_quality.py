@@ -1,0 +1,482 @@
+"""Opt-in YDS2 JPEG/stereo ADPCM relay. The proven YDS1 server is preserved.
+
+YDS2 header: <4s8I magic,width,height,fps,rate,samples,channels,JPEG=1,IMA=1.
+Packets: <4I sequence,jpeg_length,audio_length,jpeg_quality + JPEG + ADPCM.
+ADPCM header <hBBhBB contains the two initial predictor/index states. Each
+following byte contains the left high nibble and right low nibble for a frame.
+Feedback BUF milliseconds state (0=startup,1=playing,2=rebuffer,3=paused).
+
+YDS3 (PLAY3/TEST3, 2026-10-02) keeps the YDS2 packet layout. A packet whose
+jpeg_length is 0 repeats the previous picture. The relay keeps the picture
+quality steady and lowers the picture rate when a scene does not fit the
+measured Wi-Fi rate, instead of squeezing every frame into a small JPEG.
+Feedback: BUF milliseconds state decode_ms late_frames_per_second.
+SEARCH3 adds a 1-bit Galmuri9 title bitmap per result after the text lines.
+"""
+from __future__ import annotations
+import argparse
+import collections
+from pathlib import Path
+import audioop
+import io
+import itertools
+import logging
+import math
+import select
+import socket
+import socketserver
+import struct
+import subprocess
+import threading
+import time
+from http.server import ThreadingHTTPServer
+from PIL import Image, ImageDraw, ImageFont
+import server as legacy
+
+WIDTH, HEIGHT, FPS, RATE = 256, 192, 16, 32000
+SAMPLES = RATE // FPS
+HEADER = struct.pack('<4s8I', b'YDS2', WIDTH, HEIGHT, FPS, RATE, SAMPLES, 2, 1, 1)
+HEADER3 = struct.pack('<4s8I', b'YDS3', WIDTH, HEIGHT, FPS, RATE, SAMPLES, 2, 1, 1)
+TITLE_W, TITLE_H = 232, 22
+FONT_PATH = Path(__file__).resolve().parent / 'fonts' / 'Galmuri9.ttf'
+TEST_STALL_MS = 0
+
+
+class StereoIMA:
+    def __init__(self):
+        self.states = [(0, 0), (0, 0)]
+
+    def encode(self, pcm):
+        if len(pcm) != SAMPLES * 4:
+            raise ValueError('Incomplete stereo PCM block')
+        header = struct.pack('<hBBhBB', *self.states[0], 0, *self.states[1], 0)
+        left = audioop.tomono(pcm, 2, 1, 0)
+        right = audioop.tomono(pcm, 2, 0, 1)
+        a, self.states[0] = audioop.lin2adpcm(left, 2, self.states[0])
+        b, self.states[1] = audioop.lin2adpcm(right, 2, self.states[1])
+        packed = bytearray(SAMPLES)
+        for i, (x, y) in enumerate(zip(a, b)):
+            packed[2*i] = (x & 0xf0) | (y >> 4)
+            packed[2*i+1] = ((x & 15) << 4) | (y & 15)
+        return header + packed
+
+
+class AdaptiveJPEG:
+    def __init__(self):
+        self.budget = 6000
+        self.last_adjust = 0
+        self.feedback = (3000, 0, 0)
+        self.lock = threading.Lock()
+
+    def update(self, ms, mode, decode_ms=0):
+        with self.lock:
+            self.feedback = (ms, mode, decode_ms)
+
+    def encode(self, image):
+        now = time.monotonic()
+        with self.lock:
+            ms, mode, decode_ms = self.feedback
+        if now - self.last_adjust >= 2:
+            if mode == 2 or (mode == 1 and (ms < 1500 or decode_ms > 60)):
+                self.budget = max(1500, int(self.budget * .78))
+            elif mode == 1 and ms > 5300 and decode_ms <= 58:
+                self.budget = min(12000, int(self.budget * 1.08))
+            self.last_adjust = now
+        def save(q):
+            target = io.BytesIO()
+            # Baseline 4:2:0 halves IDCT work versus 4:4:4 on this ARM9.
+            image.save(target, 'JPEG', quality=q, subsampling=2, optimize=False,
+                       progressive=False)
+            return target.getvalue()
+        best, best_q = save(1), 1
+        lo, hi = 2, 92
+        while lo <= hi:
+            q = (lo + hi) // 2
+            data = save(q)
+            if len(data) <= self.budget:
+                best, best_q = data, q
+                lo = q + 1
+            else:
+                hi = q - 1
+        if len(best) > 32768:
+            raise ValueError('JPEG packet exceeds client limit')
+        return best, best_q
+
+
+def save_jpeg(image, q):
+    target = io.BytesIO()
+    image.save(target, 'JPEG', quality=q, subsampling=2, optimize=False, progressive=False)
+    return target.getvalue()
+
+
+class SmartRate:
+    """Steady-quality rate control for YDS3.
+
+    Tokens refill at the video byte rate the DSi link has sustained. A frame
+    is sent at the current steady quality when enough tokens exist; otherwise
+    the previous picture is repeated (0-byte packet). At least one picture in
+    every MAX_GAP+1 frames is sent, then at the best quality that fits. The
+    steady quality moves a few steps every two seconds, so it does not jump
+    from frame to frame with scene complexity.
+    """
+    QMIN, QMAX, MAX_GAP = 50, 88, 3
+    RATE_MIN, RATE_MAX = 40000.0, 220000.0
+
+    def __init__(self):
+        self.rate = 84000.0          # video bytes per second (audio is extra)
+        self.tokens = self.rate * 0.3
+        self.q = 70
+        self.gap = 0
+        self.first = True
+        self.window = collections.deque(maxlen=FPS * 2)
+        self.window_bytes = collections.deque(maxlen=FPS * 2)
+        self.last_adjust = time.monotonic()
+        self.feedback = (0, 0, 0, 0)
+        self.lock = threading.Lock()
+        self.budget = 0              # status compatibility
+
+    def update(self, ms, mode, decode_ms=0, late=0):
+        with self.lock:
+            self.feedback = (ms, mode, decode_ms, late)
+
+    def adjust(self):
+        now = time.monotonic()
+        if now - self.last_adjust < 2:
+            return
+        self.last_adjust = now
+        with self.lock:
+            ms, mode, decode_ms, late = self.feedback
+        if mode == 2 or (mode == 1 and ms < 2000):
+            self.rate *= 0.85
+        elif (mode == 1 and ms >= 4500 and late <= 1 and
+              sum(self.window_bytes) >= self.rate * len(self.window_bytes) / FPS * 0.8):
+            # Raise only while the rate is actually the limit; a simple scene
+            # that uses few bytes says nothing about extra Wi-Fi capacity.
+            self.rate *= 1.06
+        self.rate = min(self.RATE_MAX, max(self.RATE_MIN, self.rate))
+        sent = sum(self.window) / max(1, len(self.window))
+        if mode == 1 and late >= 3:
+            if self.q <= self.QMIN:
+                self.rate *= 0.9         # fewer pictures = less decoding
+            self.q -= 4                  # DSi decode cannot keep up
+        elif sent < 0.55:
+            self.q -= 3                  # too many repeated pictures
+        elif sent > 0.95 and late == 0 and self.tokens > self.rate * 0.3:
+            self.q += 2
+        self.q = min(self.QMAX, max(self.QMIN, self.q))
+
+    def encode(self, image):
+        self.adjust()
+        self.tokens = min(self.tokens + self.rate / FPS, self.rate * 0.6)
+        data, q = save_jpeg(image, self.q), self.q
+        if self.first or len(data) <= self.tokens:
+            pass
+        elif self.gap >= self.MAX_GAP:
+            lo, hi, best = self.QMIN, self.q - 1, None
+            while lo <= hi:
+                mid = (lo + hi) // 2
+                candidate = save_jpeg(image, mid)
+                if len(candidate) <= self.tokens:
+                    best, q = candidate, mid
+                    lo = mid + 1
+                else:
+                    hi = mid - 1
+            if best is None:
+                q = self.QMIN
+                best = save_jpeg(image, q)
+            data = best
+        else:
+            self.gap += 1
+            self.window.append(0)
+            self.window_bytes.append(0)
+            return b'', self.q
+        while len(data) > 32768 and q > 10:
+            q -= 10
+            data = save_jpeg(image, q)
+        if len(data) > 32768:
+            raise ValueError('JPEG packet exceeds client limit')
+        self.first = False
+        self.gap = 0
+        self.tokens -= len(data)
+        self.window.append(1)
+        self.window_bytes.append(len(data))
+        return data, q
+
+
+def read_feedback(sock, controller, stop):
+    pending = b''
+    while not stop.is_set():
+        try:
+            if not select.select([sock], [], [], .2)[0]:
+                continue
+            part = sock.recv(256)
+            if not part:
+                return
+            pending += part
+            if len(pending) > 1024:
+                return
+            while b'\n' in pending:
+                line, pending = pending.split(b'\n', 1)
+                words = line.split()
+                if len(words) in (3,4,5) and words[0] == b'BUF':
+                    ms, mode = int(words[1]), int(words[2])
+                    if 0 <= ms <= 10000 and 0 <= mode <= 3:
+                        extra = [int(w) for w in words[3:]]
+                        controller.update(ms, mode, *extra)
+        except (OSError, ValueError):
+            return
+
+
+def send_stream(sock, frames, v3=False):
+    encoder, audio = (SmartRate() if v3 else AdaptiveJPEG()), StereoIMA()
+    stop = threading.Event()
+    feedback = threading.Thread(target=read_feedback, args=(sock, encoder, stop), daemon=True)
+    first = next(frames, None)
+    if first is None:
+        raise RuntimeError('No complete video/audio packet produced')
+    feedback.start()
+    sock.sendall(b'OK STREAM\n' + (HEADER3 if v3 else HEADER))
+    count, total, pictures = 0, 0, 0
+    try:
+        for image, pcm in itertools.chain([first], frames):
+            jpeg, q = encoder.encode(image)
+            block = audio.encode(pcm)
+            packet = struct.pack('<4I', count, len(jpeg), len(block), q) + jpeg + block
+            sock.sendall(packet)
+            count += 1
+            total += len(packet)
+            pictures += bool(jpeg)
+            if count % FPS == 0:
+                extra = dict(video_rate_kib_s=round(encoder.rate/1024, 1), steady_quality=encoder.q,
+                             picture_fps=round(pictures*FPS/count, 1)) if v3 else {}
+                legacy.state(state='streaming', quality=q, jpeg_budget=encoder.budget,
+                             streamed_seconds=count/FPS, average_kib_s=round(total/(count/FPS)/1024, 1), **extra)
+        if v3:
+            legacy.LOG.info('HQ3 stream: %d frames, %d pictures, %.1f KiB/s, rate=%.1f KiB/s, q=%d',
+                            count, pictures, total / max(count/FPS, 1) / 1024, encoder.rate/1024, encoder.q)
+        else:
+            legacy.LOG.info('HQ stream: %d frames, %.1f KiB/s, budget=%d', count,
+                            total / max(count/FPS, 1) / 1024, encoder.budget)
+        # End the AV direction but keep feedback open until the DSi drains its
+        # buffered tail. This avoids writing into an already closed connection.
+        sock.shutdown(socket.SHUT_WR)
+        feedback.join(timeout=180)
+    finally:
+        stop.set()
+        feedback.join(timeout=1)
+
+
+def test_frames(seconds=24):
+    for index in range(seconds * FPS):
+        if TEST_STALL_MS and index == 8 * FPS:
+            time.sleep(TEST_STALL_MS / 1000)
+        image = Image.new('RGB', (WIDTH, HEIGHT))
+        draw = ImageDraw.Draw(image)
+        for x in range(WIDTH):
+            draw.line((x, 0, x, 143), fill=(x, (index*5) % 256, 255-x))
+        for y in range(144, HEIGHT, 4):
+            for x in range(0, WIDTH, 4):
+                draw.rectangle((x, y, x+3, y+3), fill='white' if (x+y)//4 % 2 else 'black')
+        x = (index*3) % 224
+        draw.rectangle((x, 45, x+31, 76), fill=(255, 255, 255), outline=(0, 0, 0), width=2)
+        draw.text((8, 8), '256x192 / 16fps / stereo', fill=(255, 255, 255))
+        samples = []
+        for j in range(SAMPLES):
+            t = (index*SAMPLES+j)/RATE
+            samples.extend((round(6000*math.sin(2*math.pi*440*t)),
+                            round(6000*math.sin(2*math.pi*660*t))))
+        yield image, struct.pack('<'+'h'*len(samples), *samples)
+
+
+def resolve(video_id):
+    if not legacy.re.fullmatch(r'[A-Za-z0-9_-]{11}', video_id):
+        raise ValueError('Invalid YouTube ID')
+    legacy.state(state='resolving', last_video=video_id, error='')
+    with legacy.yt_dlp.YoutubeDL(legacy.ydl_options(
+            format='bestvideo[height<=480][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]/best')) as ydl:
+        data = ydl.extract_info('https://www.youtube.com/watch?v='+video_id, download=False)
+    streams = data.get('requested_formats') or [data]
+    video = next((f for f in streams if f.get('vcodec') != 'none'), None)
+    audio = next((f for f in streams if f.get('acodec') != 'none'), None)
+    if not video or not audio:
+        raise ValueError('Video/audio not available')
+    legacy.LOG.info('HQ source video=%s (%sp), audio=%s', video.get('format_id'),
+                    video.get('height'), audio.get('format_id'))
+    return video, audio
+
+
+def input_options(stream):
+    # Retry an interrupted public-media connection from its byte position.
+    return ['-reconnect','1','-reconnect_streamed','1',
+            '-reconnect_on_network_error','1','-reconnect_delay_max','2'] + legacy.ffmpeg_input(stream)
+
+
+def drain_errors(pipe, tag, tails):
+    for line in iter(pipe.readline,b''):
+        text=legacy.re.sub(r'https?://\S+','[media URL]',line.decode('utf-8','replace').strip())
+        if text:
+            tails[tag]=text[-400:]
+            legacy.LOG.warning('%s: %s',tag,text)
+
+
+def live_frames(video, audio):
+    base = [legacy.FFMPEG, '-hide_banner', '-nostdin', '-loglevel', 'error']
+    vf = f'fps={FPS},scale={WIDTH}:{HEIGHT}:flags=lanczos:force_original_aspect_ratio=decrease,pad={WIDTH}:{HEIGHT}:(ow-iw)/2:(oh-ih)/2'
+    commands = [base+input_options(video)+['-an','-vf',vf,'-pix_fmt','rgb24','-f','rawvideo','pipe:1'],
+                base+input_options(audio)+['-vn','-ac','2','-ar',str(RATE),
+                    '-af',f'aresample={RATE}:filter_size=64','-f','s16le','pipe:1']]
+    processes, tails = [], {}
+    try:
+        for tag, command in zip(('HQ video', 'HQ audio'), commands):
+            p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            processes.append(p)
+            threading.Thread(target=drain_errors, args=(p.stderr, tag, tails), daemon=True).start()
+        while True:
+            rgb = legacy.read_exact(processes[0].stdout, WIDTH*HEIGHT*3)
+            pcm = legacy.read_exact(processes[1].stdout, SAMPLES*4)
+            if len(rgb) != WIDTH*HEIGHT*3:
+                if not rgb and processes[0].wait()==0:
+                    return
+                raise RuntimeError('Video ended or failed: '+'; '.join(tails.values()))
+            if len(pcm)!=SAMPLES*4 and processes[1].wait()!=0:
+                raise RuntimeError('Audio ended or failed: '+'; '.join(tails.values()))
+            yield Image.frombytes('RGB', (WIDTH, HEIGHT), rgb), pcm.ljust(SAMPLES*4, b'\0')
+    finally:
+        for p in processes:
+            if p.poll() is None:
+                p.terminate()
+            try:
+                p.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                p.kill(); p.wait()
+            p.stdout.close(); p.stderr.close()
+
+
+_title_font = None
+
+
+def title_bitmap(title):
+    """Wrap a Unicode title into two Galmuri9 lines; return a 1-bit MSB-first bitmap."""
+    global _title_font
+    if _title_font is None:
+        _title_font = ImageFont.truetype(str(FONT_PATH), 10)
+    font = _title_font
+    text = ' '.join(title.split())
+    lines, rest = [], text
+    for row in range(2):
+        if not rest:
+            break
+        if font.getlength(rest) <= TITLE_W or row == 1:
+            line = rest
+            if font.getlength(line) > TITLE_W:
+                while line and font.getlength(line + '...') > TITLE_W:
+                    line = line[:-1]
+                line = line.rstrip() + '...'
+            lines.append(line)
+            rest = ''
+            break
+        cut = len(rest)
+        while cut > 1 and font.getlength(rest[:cut]) > TITLE_W:
+            cut -= 1
+        space = rest.rfind(' ', 0, cut + 1)
+        if space > cut // 2:
+            cut = space
+        lines.append(rest[:cut].rstrip())
+        rest = rest[cut:].lstrip()
+    image = Image.new('L', (TITLE_W, TITLE_H))
+    draw = ImageDraw.Draw(image)
+    for row, line in enumerate(lines):
+        draw.text((0, row * 12 - 1), line, font=font, fill=255)
+    return image.point(lambda p: 255 if p >= 90 else 0, mode='1').tobytes()
+
+
+class Handler(legacy.Handler):
+    def handle(self):
+        locked = False
+        frames = None
+        try:
+            raw = self.rfile.readline(1025)
+            if len(raw) > 1024 or not raw.endswith(b'\n'):
+                raise ValueError('Invalid request')
+            cmd, _, arg = raw.decode('utf-8').strip().partition(' ')
+            legacy.LOG.info('%s: %s %s', self.client_address[0], cmd, arg)
+            self.request.settimeout(180)
+            if cmd == 'HELLO':
+                self.request.sendall(b'OK YouTubeDSi 2\n')
+            elif cmd == 'SEARCH':
+                results = legacy.search(arg)
+                lines = [f'OK {len(results)}\n']
+                for item in results:
+                    title = legacy.re.sub(r'[\t\r\n]', ' ', item['title']).encode('ascii','replace').decode()[:100]
+                    lines.append(item['id']+'\t'+title+'\n')
+                self.request.sendall(''.join(lines).encode('ascii'))
+            elif cmd == 'SEARCH3':
+                results = legacy.search(arg)
+                lines = [f'OK {len(results)} {TITLE_W} {TITLE_H}\n']
+                bitmaps = []
+                for item in results:
+                    title = legacy.re.sub(r'[\t\r\n]', ' ', item['title'])
+                    lines.append(item['id']+'\t'+title.encode('ascii','replace').decode()[:100]+'\n')
+                    bitmaps.append(title_bitmap(title))
+                self.request.sendall(''.join(lines).encode('ascii') + b''.join(bitmaps))
+            elif cmd in ('PLAY3','TEST3','PLAY2','TEST2','PLAY','TEST'):
+                locked = legacy.PLAY_LOCK.acquire(blocking=False)
+                if not locked:
+                    raise ValueError('Another client is playing. Stop it first.')
+                if cmd == 'TEST3':
+                    frames = test_frames(); send_stream(self.request, frames, v3=True)
+                elif cmd == 'PLAY3':
+                    frames = live_frames(*resolve(arg)); send_stream(self.request, frames, v3=True)
+                elif cmd == 'TEST2':
+                    frames = test_frames(); send_stream(self.request, frames)
+                elif cmd == 'PLAY2':
+                    frames = live_frames(*resolve(arg)); send_stream(self.request, frames)
+                elif cmd == 'TEST':
+                    legacy.test_stream(self.request)
+                else:
+                    legacy.transcode(self.request, *legacy.streams(arg))
+            else:
+                raise ValueError('Unknown command')
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            legacy.LOG.info('DSi disconnected')
+        except Exception as exc:
+            legacy.LOG.exception('HQ request failed')
+            legacy.state(state='error', error=str(exc))
+            try:
+                self.request.sendall(('ERR '+str(exc).replace('\n',' ')+'\n').encode('ascii','replace'))
+            except OSError:
+                pass
+        finally:
+            if frames is not None:
+                frames.close()
+            if locked:
+                legacy.PLAY_LOCK.release()
+            if legacy.STATUS['state'] != 'error':
+                legacy.state(state='ready')
+
+
+def main():
+    global TEST_STALL_MS
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--bind', default='192.168.0.4')
+    parser.add_argument('--port', type=int, default=8767)
+    parser.add_argument('--ffmpeg', default='C:/ffmpeg/bin/ffmpeg.exe')
+    parser.add_argument('--test-stall-ms', type=int, default=0)
+    args = parser.parse_args()
+    legacy.FFMPEG = args.ffmpeg
+    TEST_STALL_MS = args.test_stall_ms
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+    status = ThreadingHTTPServer(('127.0.0.1', args.port+1), legacy.StatusHandler)
+    threading.Thread(target=status.serve_forever, daemon=True).start()
+    legacy.LOG.info('HQ relay TCP %s:%d, status port%d', args.bind, args.port, args.port+1)
+    with legacy.Server((args.bind, args.port), Handler) as server:
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+    status.shutdown()
+
+
+if __name__ == '__main__':
+    main()

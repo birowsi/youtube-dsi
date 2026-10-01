@@ -1,0 +1,93 @@
+실기기 부팅 진단 — 2026-10-01
+
+현재 상태
+  일본판 DSi, 커펌·Wi-Fi 설정 완료.
+  사용자가 DSi 모드로 YouTubeDSi.nds 실행했으나, 안내 글자 없이 양쪽 흰 화면으로 정지.
+  원인은 아직 확정되지 않음. 에뮬레이터 직접 부팅 결과와 실제 로더 부팅은 다름.
+  언어/지역 설정은 변경하지 않음.
+  추가 실기기 결과: Diag도 글자 없이 흰 화면 정지.
+  Boot는 DSi mode yes, ARM9 reached main, Seconds 증가, A 버튼 확인 성공.
+  Boot에서 START로 TWiLight Menu++ 복귀 성공. 상단 흰 화면은 이 시험에서 정상.
+  Core는 글자 없이 흰 화면 정지.
+  Audio(Maxmod만 포함)는 화면과 버튼 정상. 실제 오디오 스트림 시험은 아직 아님.
+  Wifi(Wi-Fi 코어만 포함)는 접속을 시작하기 전부터 글자 없이 흰 화면 정지.
+  따라서 앱의 접속/SD/키보드/재생 이전 단계인 Wi-Fi ARM7 코어가 실패 조건임.
+  Hardware RAM build 1은 실기기에서 ARM9 reached main / DSi mode yes 확인.
+  A 후 비디오·키보드 초기화까지 진행했으나 Connecting saved Wi-Fi...에서 멈춤.
+  주 RAM 배치는 첫 글자 전 흰 화면을 우회했지만, 실제 무선 연결은 미해결.
+
+다음 시험: roms/tools/YouTubeDSiConnect.nds (CONNECT CHECK / RAM build 2)
+  같은 DSi 모드로 실행. A를 눌렀다가 놓으면 Wi-Fi 초기화와 접속을 시작.
+  실제 libdswifi는 설치 SDK 바이너리를 그대로 사용하며 ARM7 함수 진입·복귀를 추적.
+  INIT_ONLY로 설정 로드를 먼저 하고, Wifi_AutoConnect를 별도로 실행.
+  접속 작업은 별도 협력 스레드. 화면 갱신과 버튼 카운터는 ARM9 쪽에서 진행.
+  재생·키보드·SD 코드는 ARM9에서 제외하여 접속 단계만 확인.
+  표시: Phase / A7 stage / SCFG7 / CLK / SPI / Saved APs / Status / IP.
+  A는 카운터 시험. B는 취소 요청. 드라이버 내부 대기 중에는 취소가 즉시 완료되지
+  않을 수 있으며 Cancel pending in driver로 표시. 완료 뒤 START로 로더 복귀.
+  멈춘 듯 보이면 10초 정도 뒤 Seconds 증가와 A presses 증가 여부 확인.
+  연결 성공 시 CONNECTED와 IP 주소 표시.
+  결과를 알려줄 때 Phase, A7 stage, SCFG7, Saved APs, Status 및 초·버튼 반응을 기록.
+  Phase 1 동안 Saved APs: 0은 아직 설정 읽기가 완료되지 않은 값임.
+  PC 검증: 공식 melonDS 코어의 DSi 직접 부팅과 가상 AP에서 Phase 5 / CONNECTED,
+  Status 5 / IP 10.64.0.16 확인. 이는 실제 WPA2 공유기 접속 검증은 아님.
+  에뮬레이터 전용 별도 ROM으로 ARM7을 단계 25에서 무한 대기시킨 반례 시험:
+  Phase 1 유지, Seconds 5 → 12 증가, A presses 0 → 1 증가,
+  B 입력 후 Cancel pending in driver 표시 확인. 실기기 전달 ROM에는 강제 대기 없음.
+  이 파일은 실제 연결 수정을 확정한 빌드가 아니라 정지 위치를 분리한 접속 진단임.
+
+현재 시험 파일: roms/tools/YouTubeDSiHardware.nds
+  Wi-Fi+Maxmod ARM7의 DSi 전용 코드/데이터/힙을 0x03000000의 NWRAM 대신
+  0x02D00000..0x02D40000 주 RAM에 배치. ARM9 힙은 0x02D00000 아래로 제한.
+  라이브러리 포함 여부, ARM9 검색/재생 기능은 유지. SD 설정 읽기는 생략.
+  이는 NWRAM 배치/로더 상호작용을 검증하는 우회 빌드이며, 원인 확정은 아님.
+  같은 DSi 모드로 실행하면 HARDWARE RAM build 1 / ARM9 reached main 표시.
+  이번 실기기 시험 범위: 초기 글자 표시 → A → Wi-Fi 초기화 → 앱 메뉴까지.
+  부팅 우회 여부를 먼저 확인. X 재생 시험은 아직 진행하지 않음.
+  main 이전 CPU 통신 대기에서는 상단에 숫자 두 줄이 표시됨.
+  위 초록 숫자: ARM7 단계(16진수); 아래 청록 숫자: IPC 상태(16진수).
+  숫자 또는 마지막 안내 글자를 기록하면 정지 위치를 추가로 좁힐 수 있음.
+  이 파일도 아무 표시 없이 흰 화면이면 로더가 ARM9 시작 코드에도 못 들어왔거나
+  표시 이전 단계에서 멈춘 경우가 포함되므로, 그 사실만으로 RAM 원인을 확정하지 않음.
+  PC 검증: melonDS DSi 직접 부팅, 초기 글자, A 후 Wi-Fi·오디오 초기화 및 메뉴 확인.
+  ARM7을 단계 05에서 의도적으로 멈춘 별도 에뮬레이터 시험에서 05/01 표시 확인.
+  스트리밍 TEST는 약 100KB TCP 데이터 수신 후 mmStreamBegin의 ARM7 응답 대기에서
+  멈췄고 SPU 음성 출력은 없음. 따라서 재생 기능은 이 빌드에서 검증 실패임.
+  원래 YouTubeDSi.nds의 에뮬레이터 검색/재생 검증 결과와 혼동하지 말 것.
+
+먼저 실행할 파일
+  roms/tools/YouTubeDSiDiag.nds
+  DSi SD의 /roms/tools/ 에 복사하고 DSi 모드로 실행.
+  초기 화면: YouTube DSi boot / DIAGNOSTIC build 2 / ARM9 reached main.
+  A를 누르면 그래픽 → 키보드 → Wi-Fi → 오디오 초기화 후 앱 메뉴로 진행.
+  이 ROM은 SD 설정 읽기를 생략하고 192.168.0.4:8765를 직접 사용.
+  흰 화면이 해결되면 X로 영상·음성 시험, A로 실제 유튜브 검색 가능.
+  멈추면 마지막으로 보인 글자를 기록.
+
+진단 ROM도 안내 글자 없이 양쪽 흰 화면이면
+  roms/tools/YouTubeDSiBoot.nds
+  같은 폴더에 복사하고 DSi 모드로 실행.
+  이 파일에는 SD·키보드·Wi-Fi·오디오 코드가 없음. ARM7도 최소 코어임.
+  정상 화면: YouTube DSi BOOT CHECK / Seconds / A presses.
+  A를 눌러 카운터 증가를 확인. START는 로더 복귀.
+  이 파일도 같은 증상이면 앱의 SD/Wi-Fi 초기화 외에 런타임·로더·ROM 로딩을 조사할 근거가 됨.
+  정상 실행되면 앱 진단 ROM과 최소 코어 간 차이를 추가로 조사.
+
+PC에서 확인한 사항
+  두 ROM의 DSi enhanced 헤더, 빌드 성공 및 melonDS DSi 모드 초기 화면 확인.
+  YouTubeDSiDiag에서 A 입력 후 Wi-Fi 연결과 앱 메뉴 도달 확인.
+  YouTubeDSiBoot에서 초 카운터 정상 진행 확인.
+  실기기 수정 성공으로 확정한 상태는 아님. 사용자 결과가 필요함.
+
+다음 비교: YouTubeDSiCore.nds
+  성공한 Boot의 화면·버튼 코드에 Diag와 같은 Wi-Fi+Maxmod ARM7 코어만 붙임.
+  ARM9 쪽에서는 SD·키보드·Wi-Fi·오디오를 시작하지 않음.
+  정상 화면: YouTube DSi CORE CHECK / ARM7: Wi-Fi + Maxmod / Seconds / A presses.
+  이 파일의 ARM7 및 ARM7i 바이트가 Diag와 완전히 같음을 PC에서 확인함.
+  성공하면 ARM9 앱 초기화·라이브러리 차이를 조사하고,
+  글자 없이 흰 화면이면 추가 ARM7 코어와 로더의 상호작용을 더 조사함.
+
+개발자용 재빌드
+  WSL client 폴더: make NAME=YouTubeDSiDiag
+  WSL bootcheck 폴더: make
+  서버: start-server.cmd (이미 켜진 경우 중복 실행하지 않음).

@@ -1,0 +1,2 @@
+# Python 3.11 required for stdlib audioop. yt-dlp is frozen in server/vendor.
+Pillow==12.2.0

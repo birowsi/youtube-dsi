@@ -1,0 +1,17 @@
+--- a/sys/crts/ds_arm9.ld
++++ b/sys/crts/ds_arm9.ld
+@@ -314,7 +314,7 @@
+ 
+     __tls_size = __tls_end - __tls_start ;
+ 
+-    .twl __end__ : AT(MAX(0x2400000,__end__))
++    .twl MAX(0x2400000,__end__) : AT(MAX(0x2400000,__end__))
+     {
+         __arm9i_lma__ = LOADADDR(.twl);
+         __arm9i_start__ = ABSOLUTE(.);
+@@ -418,3 +418,5 @@
+ }
+ 
+ ASSERT(__sbss_end <= __dtcm_data_top, "DTCM data overflow; increase __dtcm_data_size or move data out of DTCM");
++
++ASSERT(__twl_end__ < 0x02d00000, "HQ ARM9 buffers overlap ARM7 reserve");

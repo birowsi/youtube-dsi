@@ -1,0 +1,76 @@
+YouTube DSi 시험 버전 — 2026-10-01
+
+목표: DSi에서 검색어 입력 → 유튜브 검색 결과 선택 → Wi-Fi로 영상과 소리 재생.
+이 PC가 유튜브 접속과 변환을 맡습니다. 영상 파일을 SD에 미리 복사할 필요는 없습니다.
+현대 웹 브라우저 전체 구동과 DSi 단독 유튜브 접속은 이번 버전에 포함되지 않습니다.
+
+1. SD 카드 준비
+   sd-root 폴더 안의 내용을 DSi SD 카드 루트에 합칩니다.
+   추가되는 파일은 아래 두 개입니다.
+     /roms/tools/YouTubeDSi.nds
+     /youtube-dsi.ini
+   기존 TWiLight Menu++ 파일을 변경할 필요는 없습니다.
+
+2. PC 서버
+   start-server.cmd를 실행하고 계속 켜 둡니다.
+   필요한 Python/FFmpeg는 현재 PC에 있고 yt-dlp는 프로젝트의 server/vendor에 있습니다.
+   이번 작업에서 숨김 상태로 서버를 실행해 두었습니다.
+   PC 상태 확인: http://127.0.0.1:8766/status.json
+   LAN 주소: 192.168.0.4:8765 (TCP)
+   서버를 중복 실행하면 주소 사용 중 오류가 납니다.
+   PC를 재시작한 뒤에는 start-server.cmd로 다시 실행하세요.
+   직접 실행한 서버를 종료하려면 콘솔에서 Ctrl+C를 누릅니다.
+
+3. DSi 연결
+   DSi 시스템 설정에서 2.4GHz WPA2 Wi-Fi를 등록합니다.
+   같은 공유기의 PC에 접근할 수 있어야 합니다. 게스트 Wi-Fi의 기기 격리가 켜져 있으면 안 됩니다.
+   TWiLight Menu++에서 /roms/tools/YouTubeDSi.nds를 실행합니다.
+   DSi 모드가 yes인지 확인하세요. DS 모드에서는 WPA2 지원을 사용할 수 없습니다.
+   X 버튼: 12초 색상 시험 영상과 440Hz 소리 (유튜브 접속 없이 연결/출력 확인).
+   A 버튼: 검색. 화면 키보드로 영문 검색어 입력 후 Enter 또는 START.
+   결과 화면: 위/아래 버튼으로 선택하고 A로 재생. 결과 항목 터치도 지원합니다.
+   재생 화면: A 일시정지/재개, B 결과로 돌아가기.
+   첫 화면 Y 버튼: 서버 IPv4 주소 변경. 재실행 시에는 ini의 host 값을 사용합니다.
+   첫 화면 START 버튼: 홈브류 메뉴로 돌아가기.
+
+현재 한계
+   128×96, 8fps, RGB332(256색), 16kHz 모노 음성입니다. 화면은 256×192로 확대합니다.
+   영문 키보드와 ASCII 글꼴을 사용하므로 한글/일본어 제목은 ?로 표시될 수 있습니다.
+   원래 제목은 PC의 status.json에 UTF-8로 남습니다.
+   한 번에 검색 결과 최대 8개, 재생 클라이언트 한 대를 지원합니다.
+   로그인/연령 제한/유료 콘텐츠, 라이브 방송, 탐색(seek), 자막은 검증하지 않았습니다.
+   유튜브 형식 변경이나 요청 제한에 따라 조회가 실패할 수 있습니다.
+   실제 DSi에서 화면, 음성, 입력, WPA2 접속은 아직 검증되지 않았습니다.
+
+검증된 항목
+   BlocksDS 1.24.0 / ARM GCC 16.2.0으로 .nds 빌드 성공.
+   DSi enhanced 헤더(0x02) 및 Wi-Fi+Maxmod ARM7 core 포함.
+   실제 유튜브 검색 결과 조회 성공.
+   실제 유튜브 영상 48프레임(6초)과 음성 PCM의 서버 전송 검증 성공.
+   12초 시험 스트림의 길이, 화면 형식, 음성 샘플 검증 성공.
+   결과: verification.json, youtube-preview.png, test-preview.png.
+   melonDS 공식 코어의 DSi 모드에서 실제 .nds 실행 확인.
+   터치 키보드로 검색어 입력 → 결과 8개 표시 → 영상 선택 → Wi-Fi 재생 확인.
+   시험 영상의 440Hz 음과 실제 유튜브 영상의 음성을 에뮬레이터 SPU 출력에서 검증.
+   일시정지 중 화면 유지 및 재개 후 재생 시간 진행 확인.
+   네트워크 협력 스레드를 실행하지 못하던 대기 루프를 수정함.
+   결과: emulator-final/*.png, emulator-final/verification.json, melonDS-검증.txt.
+
+개발
+   클라이언트: client/source/main.c, client/Makefile
+   중계 서버: server/server.py
+   재빌드: WSL Ubuntu-22.04에서 client 폴더로 이동 후 make
+   서버 시험: python tools/smoke_test.py --live
+   빌드 도구: /opt/wonderful (WSL); BlocksDS SDK/도구는 공식 Wonderful 패키지로 설치됨.
+   서버 라이브러리 갱신: python -m pip install --upgrade --target server/vendor "yt-dlp[default]"
+   에뮬레이터 시험기 소스: tools/emutest. 재실행 명령은 melonDS-검증.txt 참고.
+
+참고
+   https://github.com/Gericom/YoutubeDS (기존 앱 조사; 이번 앱은 별도로 구현)
+   https://github.com/blocksds/sdk (Wi-Fi, 키보드, Maxmod 공식 CC0 예제)
+   https://github.com/yt-dlp/yt-dlp
+
+방화벽
+   신규 방화벽 규칙은 추가되지 않았습니다.
+   현재 PC에 이미 있는 Python 3.11 TCP 허용 규칙이 Private 프로필에 적용되어 있습니다.
+   별도의 PC로 옮길 경우 포트 접근 가능 여부를 다시 확인해야 합니다.

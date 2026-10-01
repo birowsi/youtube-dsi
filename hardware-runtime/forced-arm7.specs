@@ -1,0 +1,23 @@
+%include <picolibc.specs>
+
+%rename cc1plus blocksds_cc1plus
+%rename cpp blocksds_cpp
+%rename link blocksds_link
+
+*cpp:
+-D__NDS__ -D__BLOCKSDS__ -DARM7 %(blocksds_cpp)
+
+*cc1_cpu:
+-mcpu=arm7tdmi
+
+*cc1plus:
+%(cpp) %(blocksds_cc1plus)
+
+*link:
+%(blocksds_link) -T /mnt/c/Users/hanbi/Desktop/NDSi/youtube-dsi/hardware-runtime/arm7.ld --gc-sections --no-warn-rwx-segments --defsym=__sync_synchronize=__sync_synchronize_none
+
+*startfile:
+/mnt/c/Users/hanbi/Desktop/NDSi/youtube-dsi/hardware-runtime/forced-crt7.o
+
+*lib:
+%(libgcc)

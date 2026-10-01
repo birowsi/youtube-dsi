@@ -1,0 +1,104 @@
+--- a/source/arm7/twl/card.twl.c
++++ b/source/arm7/twl/card.twl.c
+@@ -25,6 +25,21 @@
+ #include "arm7/twl/ieee/wpa.h"
+ #include "common/random.h"
+ 
++// This probe region belongs to the diagnostic build, not the release app.
++#ifdef WIFI_TWL_TRACE
++static inline void twl_trace(unsigned step, unsigned value)
++{
++    volatile u32 *p = (volatile u32 *)0x0237f000;
++    p[19] = step;
++    p[15] = value;
++}
++#define TWL_TRACE(step, value) twl_trace((step), (value))
++#define TWL_STAGE(stage) (*(volatile u32 *)0x0237f000 = (stage))
++#else
++#define TWL_TRACE(step, value) ((void)0)
++#define TWL_STAGE(stage) ((void)0)
++#endif
++
+ static wifi_card_ctx wlan_ctx = {0};
+ 
+ static int wifi_card_wlan_init(void);
+@@ -1062,12 +1077,16 @@
+ 
+ int wifi_card_device_init(void)
+ {
++    TWL_STAGE(0x33);
+     memset(&wlan_ctx, 0, sizeof(wlan_ctx));
+ 
+     wlan_ctx.tmio.clk_cnt = 0; // HCLK divider, 7=512 (largest possible) 0=2
+     wlan_ctx.tmio.bus_width = 1;
+ 
+-    return wifi_card_wlan_init();
++    int result = wifi_card_wlan_init();
++    TWL_TRACE(0x34, (u32)result);
++    TWL_STAGE(0x34);
++    return result;
+ }
+ 
+ static int wifi_card_device_init_bmi(void)
+@@ -1120,7 +1139,9 @@
+     command[0] = WRITE_FOUT_2;
+     command[1] = 0x00;
+     rtcTransaction(command, 2, 0, 0);
++    TWL_TRACE(0x40, 0x3013);
+     i2cWriteRegister(I2C_PM, 0x30, 0x13);
++    TWL_TRACE(0x41, 0);
+ 
+     REG_SCFG_WL = SCFG_WL_OFFB; // SCFG_WL on?
+ 
+@@ -1173,7 +1194,9 @@
+             while (true)
+             {
+                 // CMD5 - IO_SEND_OP_COND
++                TWL_TRACE(0x42, ocr);
+                 wifi_card_send_command(cmd5, ocr);
++                TWL_TRACE(0x43, ctx->tmio.resp[0]);
+                 if (ctx->tmio.status & 4)
+                 {
+                     WLOG_PUTS("T: Skip opcond...\n");
+@@ -1288,6 +1311,7 @@
+     while (true)
+     {
+         // Read register 0x02 (function enable) hibyte until it's ready
++        TWL_TRACE(0x44, 3);
+         if (wifi_card_read_func0_u8(0x3) == 0x02)
+             break;
+     }
+@@ -1339,7 +1363,9 @@
+     //wifi_card_bmi_wait_count4();
+ 
+     // Begin talking to bootloader
++    TWL_TRACE(0x45, device_chip_id);
+     u32 bmi_ver = wifi_card_bmi_get_version();
++    TWL_TRACE(0x46, bmi_ver);
+     WLOG_PRINTF("T: BMI version: 0x%x\n", (unsigned int)bmi_ver);
+     WLOG_FLUSH();
+ 
+@@ -1441,11 +1467,15 @@
+     // Launch firmware
+     WLOG_PUTS("T: Launching FW\n");
+     WLOG_FLUSH();
++    TWL_TRACE(0x47, device_host_interest_addr);
+     wifi_card_bmi_start_firmware();
++    TWL_TRACE(0x48, 0);
+ 
+     while (1)
+     {
++        TWL_TRACE(0x49, device_host_interest_addr + 0x58);
+         u32 is_ready = wifi_card_read_intern_word(device_host_interest_addr + 0x58);
++        TWL_TRACE(0x4a, is_ready);
+         if (is_ready == 1)
+             break;
+ 
+@@ -1458,6 +1488,7 @@
+     WLOG_PRINTF("T: FW %x ready.\nT: Handshaking...\n", (unsigned int)device_eeprom_version);
+     WLOG_FLUSH();
+ 
++    TWL_TRACE(0x4b, device_eeprom_version);
+     wifi_card_bInitted = true;
+ 
+     // Enable IRQs

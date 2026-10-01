@@ -1,0 +1,51 @@
+--- a/sys/crts/ds_arm7.ld
++++ b/sys/crts/ds_arm7.ld
+@@ -40,7 +40,7 @@
+     iwram : ORIGIN = 0x03800000 - __shared_wram_size, LENGTH = 65536 + __shared_wram_size
+ 
+     twl_ewram : ORIGIN = 0x02e80000, LENGTH = 512K - 64K
+-    twl_iwram : ORIGIN = 0x03000000, LENGTH = 256K
++    twl_iwram : ORIGIN = 0x02d00000, LENGTH = 256K
+ }
+ 
+ __iwram_start	=	ORIGIN(iwram);
+@@ -54,6 +54,8 @@
+ __irq_flagsaux	=	0x04000000 - 0x40;
+ __irq_vector	=	0x04000000 - 4;
+ 
++
++__twl_heap_limit = ORIGIN(twl_iwram) + LENGTH(twl_iwram);
+ SECTIONS
+ {
+ 
+@@ -339,3 +341,5 @@
+     .note.gnu.arm.ident 0 : { KEEP (*(.note.gnu.arm.ident)) }
+     /DISCARD/ : { *(.note.GNU-stack) *(.gnu_debuglink) *(.gnu.lto_*) }
+ }
++
++ASSERT(__twl_end__ < __twl_heap_limit, "ARM7 TWL reserve exhausted");
+--- a/sys/crts/ds_arm7_crt0.s
++++ b/sys/crts/ds_arm7_crt0.s
+@@ -93,7 +93,7 @@
+ 
+     // r1 = heap end
+     ldrne   r1, =(0x03800000 + 64 * 1024) // End of iwram
+-    ldreq   r1, =(0x03000000 + 256 * 1024) // End of twl_iwram
++    ldreq   r1, =__twl_heap_limit // End of twl_iwram
+ 
+     ldr     r2, =fake_heap_start
+     str     r0, [r2]
+--- a/sys/crts/ds_arm9_crt0.s
++++ b/sys/crts/ds_arm9_crt0.s
+@@ -177,6 +177,11 @@
+ 
+     ldr     r1, =fake_heap_end
+     sub     r8, r8, 0xC000
++    // Reserve ARM7 TWL code/heap before any ARM9 constructor runs.
++    // DS mode has only 4 MiB and therefore retains its existing heap limit.
++    ldr     r2, =0x02d00000
++    cmp     r8, r2
++    movhi   r8, r2
+     str     r8, [r1]
+ 
+     // We need to do some additional initialization, but that needs to happen

@@ -1,0 +1,35 @@
+YouTubeDSi 현재 안내 — 2026-10-01
+
+실기기에서 성공한 판: ../roms/tools/YouTubeDSiCompat.nds
+새 고화질·버퍼 개선판: ../roms/tools/YouTubeDSiHQ.nds (최종 실기기 확인 필요)
+작동하는 Compat 파일은 보존한다.
+
+현재 앱은 DSi 모드로 실행하되 DS/NTR Wi-Fi를 사용한다.
+저장된 DS 호환 Open/WEP AP로 연결한다. TWL 네이티브/WPA2 해결판이 아니다.
+작동한 기기 설정과 AP를 유지한다. NAND·시스템 소프트웨어 변경은 필요 없다.
+
+Compat PC 서버: start-server.cmd / TCP 8765
+HQ PC 서버: start-quality-server.cmd / TCP 8767
+HQ는 Python 3.11 + Pillow를 사용하며 현재 PC에 준비되어 있다.
+같은 서버가 이미 실행 중이면 중복 실행하지 않는다.
+SD의 /youtube-dsi.ini 에 host=PC주소를 사용한다. 현재 주소는 192.168.0.4.
+HQ 전용 포트를 바꿀 때만 quality_port= 값을 추가한다. 기본값은 8767.
+
+A: 검색 / 결과에서 재생 / 재생 중 일시정지·재개
+B: 재생 중 돌아가기
+X: 메뉴에서 시험 영상·소리
+START: 메뉴에서 TWiLight로 돌아가기
+
+HQ: 256x192 / 16fps / RGB555 / 32kHz 스테레오
+Compat: 128x96 확대 / 8fps / RGB332 / 16kHz 모노
+HQ는 미리 받는 버퍼와 자동 JPEG 품질 조절을 사용한다.
+DSi 모드와 CPU 133MHz 조건에서 사용한다.
+
+상세 사용·품질·검증 한계: 고화질판-사용법.md
+흰 화면·접속 해결 원인, 고정 버전, 재빌드·복원: 해결기록.md
+상세 원본 조사: investigation/HARDWARE_FINDINGS.md
+실기기 성공 기준판 백업: releases/YouTubeDSiCompat-20261001.zip
+새 HQ 검증 수치: investigation/quality/verification.json
+
+사용법-초기실험.txt 는 과거 TWL/WPA 시험 단계 기록이다.
+그 파일의 WPA2 지원·실기기 미확인·기본 make 안내는 현재 사용법이 아니다.

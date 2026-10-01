@@ -1,0 +1,73 @@
+melonDS DSi 검색·재생 검증 — 2026-10-01
+
+실행한 프로그램
+  client/YouTubeDSi.nds와 SD용 실행 파일은 같은 파일입니다.
+  공식 melonDS 코어를 WSL에서 빌드하고 tools/emutest 시험기로 실행했습니다.
+  코어 버전: 906e9ebb27da8c6a715cd7abab4abfe8a8d29427
+  DSi 모드, ARM 인터프리터, 소프트웨어 그래픽, 공식 Slirp 네트워크.
+  GUI 없이 실제 터치·버튼 입력, GPU 프레임버퍼, SPU PCM 출력을 기록했습니다.
+  앱의 네트워크 요청이나 유튜브 검색 결과를 흉내 낸 시험이 아닙니다.
+
+시험 환경의 범위
+  FreeBIOS와 생성 펌웨어로 홈브류를 직접 부팅했습니다.
+  DT304D039C0740EA5C/nand.bin은 읽거나 수정하지 않았습니다.
+  사용자 콘솔의 NAND 부팅·SD 로더·저장된 AP 설정을 재현한 시험은 아닙니다.
+  가상 melonAP로 연결했고, 실제 DSi의 WPA2 무선 환경은 아직 시험하지 않았습니다.
+  영상 변환은 Windows PC 중계 서버가 맡습니다. 유튜브를 직접 여는 웹 브라우저는 아닙니다.
+
+확인한 동작
+  1. DSi 모드에서 실제 ROM 부팅, Wi-Fi 연결, 메인 메뉴 표시.
+  2. X 버튼 시험 스트림: RGB332 영상, 128×96·8fps 화면 진행.
+     SPU 출력에서 440Hz 시험 음을 확인함.
+  3. DSi 화면 키보드로 "deltarune dsi demo" 입력 후 START.
+     실제 유튜브 결과 8개가 DSi 하단 화면에 표시됨.
+  4. 첫 결과 "DELTARUNE DSi Demo Release" (2Wi9SJYScKg) 선택.
+     Wi-Fi로 실제 영상과 음성 재생. 상단 화면과 하단 타이머·버퍼 진행 확인.
+  5. A로 일시정지: 2초 간격의 상단 프레임버퍼가 완전히 같음.
+     A로 재개: 화면 상태와 재생 시간 다시 진행.
+  6. 영상 종료 후 메뉴로 돌아오는 동작 확인.
+
+수정한 버그
+  swiWaitForVBlank()만 호출하면 lwIP 협력 스레드가 실행되지 않아
+  TCP 연결 뒤 응답 수신이 멈췄습니다. 대기를 cothread_yield_irq(IRQ_VBLANK),
+  수신 진행 중 양보를 cothread_yield()로 바꾸고 재검증했습니다.
+  시험 중 시도한 Slirp MTU 변경은 되돌렸습니다. 최종 코어는 수정하지 않았습니다.
+
+기록
+  emulator-final/query2.png             터치 키보드로 입력한 검색어
+  emulator-final/results.png            실제 유튜브 검색 결과
+  emulator-final/test-playback.png      시험 영상 재생
+  emulator-final/youtube-playback.png   실제 유튜브 영상 재생
+  emulator-final/paused.png             일시정지
+  emulator-final/resumed.png            재개
+  emulator-final/verification.json      ROM 해시·오디오 분석·검증 범위
+  emulator-final/network.pcap           실제 Ethernet 패킷 기록
+  emulator-final/audio.pcm              48kHz 스테레오 PCM16LE, SPU 출력 전체
+
+재실행
+  먼저 start-server.cmd를 실행합니다. 기본 서버 IP는 192.168.0.4입니다.
+  이 PC의 WSL Ubuntu-22.04에서:
+    cd /mnt/c/Users/hanbi/Desktop/NDSi/youtube-dsi/tools
+    cmake -S emutest -B emutest-build -DCMAKE_BUILD_TYPE=Release
+    cmake --build emutest-build -j6
+    ./emutest-build/emutest ../client/YouTubeDSi.nds ../emulator-replay 18000 dsi
+
+  출력 폴더의 control.txt를 새로 저장하면 입력이 적용됩니다.
+  숫자는 누를 버튼의 비트 마스크: A=1, B=2, START=8, X=1024.
+    key 1024
+  0.2초 이상 뒤 아래 내용으로 파일을 다시 저장해 버튼을 놓습니다.
+    release
+  터치는 DSi 하단 화면의 원래 256×192 좌표입니다.
+    touch 80 152
+  화면 저장:
+    capture screenshot
+  실행 종료:
+    quit
+  capture는 상단·하단을 합친 256×384 BGRA 파일을 저장합니다.
+  키보드 좌표: 숫자 행 y=120, qwerty 행 y=136, asdf 행 y=152,
+  zxcv 행 y=168, 스페이스 행 y=184. 확대 스크린샷 좌표와 혼동하지 마세요.
+
+출처
+  https://github.com/melonDS-emu/melonDS
+  https://github.com/blocksds/dswifi
+  https://github.com/blocksds/sdk

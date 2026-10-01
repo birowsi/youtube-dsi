@@ -1,0 +1,19 @@
+[
+  {
+    "command": "TEST",
+    "frames": 96,
+    "audio_rms": 2828.5
+  },
+  {
+    "search_results": 8,
+    "first_result": [
+      "2Wi9SJYScKg",
+      "DELTARUNE DSi Demo Release"
+    ]
+  },
+  {
+    "command": "PLAY 2Wi9SJYScKg",
+    "frames": 48,
+    "audio_rms": 985.0
+  }
+]

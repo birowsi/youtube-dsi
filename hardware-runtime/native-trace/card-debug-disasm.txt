@@ -1,0 +1,1877 @@
+
+/mnt/c/Users/hanbi/Desktop/NDSi/youtube-dsi/hardware-runtime/native-trace/card-debug.o:     file format elf32-littlearm
+
+
+Disassembly of section .text.ioDelay:
+
+00000000 <ioDelay>:
+   0:	2300      	movs	r3, #0
+   2:	3301      	adds	r3, #1
+   4:	4298      	cmp	r0, r3
+   6:	d1fc      	bne.n	2 <ioDelay+0x2>
+   8:	4770      	bx	lr
+
+Disassembly of section .text.wifi_card_send_command:
+
+00000000 <wifi_card_send_command>:
+   0:	b510      	push	{r4, lr}
+   2:	000a      	movs	r2, r1
+   4:	0004      	movs	r4, r0
+   6:	2100      	movs	r1, #0
+   8:	4803      	ldr	r0, [pc, #12]	@ (18 <wifi_card_send_command+0x18>)
+   a:	60c1      	str	r1, [r0, #12]
+   c:	0021      	movs	r1, r4
+   e:	f7ff fffe 	bl	0 <wifi_sdio_send_command>
+			e: R_ARM_THM_CALL	wifi_sdio_send_command
+  12:	bc10      	pop	{r4}
+  14:	bc01      	pop	{r0}
+  16:	4700      	bx	r0
+  18:	00000000 	.word	0x00000000
+			18: R_ARM_ABS32	.bss.wlan_ctx
+
+Disassembly of section .text.wifi_card_read_func_byte:
+
+00000000 <wifi_card_read_func_byte>:
+   0:	4b09      	ldr	r3, [pc, #36]	@ (28 <wifi_card_read_func_byte+0x28>)
+   2:	0249      	lsls	r1, r1, #9
+   4:	4019      	ands	r1, r3
+   6:	0700      	lsls	r0, r0, #28
+   8:	4301      	orrs	r1, r0
+   a:	b510      	push	{r4, lr}
+   c:	4807      	ldr	r0, [pc, #28]	@ (2c <wifi_card_read_func_byte+0x2c>)
+   e:	f7ff fffe 	bl	0 <wifi_card_read_func_byte>
+			e: R_ARM_THM_CALL	wifi_card_send_command
+  12:	4b07      	ldr	r3, [pc, #28]	@ (30 <wifi_card_read_func_byte+0x30>)
+  14:	6a5a      	ldr	r2, [r3, #36]	@ 0x24
+  16:	20ff      	movs	r0, #255	@ 0xff
+  18:	0752      	lsls	r2, r2, #29
+  1a:	d402      	bmi.n	22 <wifi_card_read_func_byte+0x22>
+  1c:	7d18      	ldrb	r0, [r3, #20]
+  1e:	0600      	lsls	r0, r0, #24
+  20:	0e00      	lsrs	r0, r0, #24
+  22:	bc10      	pop	{r4}
+  24:	bc02      	pop	{r1}
+  26:	4708      	bx	r1
+  28:	03fffe00 	.word	0x03fffe00
+  2c:	00000434 	.word	0x00000434
+  30:	00000000 	.word	0x00000000
+			30: R_ARM_ABS32	.bss.wlan_ctx
+
+Disassembly of section .text.wifi_card_read_func0_u8:
+
+00000000 <SDIO_func0_read_u8>:
+   0:	b510      	push	{r4, lr}
+   2:	0001      	movs	r1, r0
+   4:	2000      	movs	r0, #0
+   6:	f7ff fffe 	bl	0 <SDIO_func0_read_u8>
+			6: R_ARM_THM_CALL	wifi_card_read_func_byte
+   a:	bc10      	pop	{r4}
+   c:	bc02      	pop	{r1}
+   e:	4708      	bx	r1
+
+Disassembly of section .text.wifi_card_read_func1_u8:
+
+00000000 <SDIO_func1_read_u8>:
+   0:	b510      	push	{r4, lr}
+   2:	0001      	movs	r1, r0
+   4:	2001      	movs	r0, #1
+   6:	f7ff fffe 	bl	0 <SDIO_func1_read_u8>
+			6: R_ARM_THM_CALL	wifi_card_read_func_byte
+   a:	bc10      	pop	{r4}
+   c:	bc02      	pop	{r1}
+   e:	4708      	bx	r1
+
+Disassembly of section .text.wifi_card_read_mbox0_u32_timeout:
+
+00000000 <ath6k_mbox0_read_u32_timeout>:
+   0:	b5f8      	push	{r3, r4, r5, r6, r7, lr}
+   2:	0005      	movs	r5, r0
+   4:	000e      	movs	r6, r1
+   6:	2400      	movs	r4, #0
+   8:	2701      	movs	r7, #1
+   a:	480f      	ldr	r0, [pc, #60]	@ (48 <ath6k_mbox0_read_u32_timeout+0x48>)
+   c:	f7ff fffe 	bl	0 <ath6k_mbox0_read_u32_timeout>
+			c: R_ARM_THM_CALL	wifi_card_read_func1_u8
+  10:	4238      	tst	r0, r7
+  12:	d102      	bne.n	1a <ath6k_mbox0_read_u32_timeout+0x1a>
+  14:	3401      	adds	r4, #1
+  16:	42b4      	cmp	r4, r6
+  18:	d3f7      	bcc.n	a <ath6k_mbox0_read_u32_timeout+0xa>
+  1a:	480b      	ldr	r0, [pc, #44]	@ (48 <ath6k_mbox0_read_u32_timeout+0x48>)
+  1c:	f7ff fffe 	bl	0 <ath6k_mbox0_read_u32_timeout>
+			1c: R_ARM_THM_CALL	wifi_card_read_func1_u8
+  20:	2201      	movs	r2, #1
+  22:	0001      	movs	r1, r0
+  24:	4010      	ands	r0, r2
+  26:	4211      	tst	r1, r2
+  28:	d00b      	beq.n	42 <ath6k_mbox0_read_u32_timeout+0x42>
+  2a:	2400      	movs	r4, #0
+  2c:	0026      	movs	r6, r4
+  2e:	20ff      	movs	r0, #255	@ 0xff
+  30:	f7ff fffe 	bl	0 <ath6k_mbox0_read_u32_timeout>
+			30: R_ARM_THM_CALL	wifi_card_read_func1_u8
+  34:	40a0      	lsls	r0, r4
+  36:	3408      	adds	r4, #8
+  38:	4306      	orrs	r6, r0
+  3a:	2c20      	cmp	r4, #32
+  3c:	d1f7      	bne.n	2e <ath6k_mbox0_read_u32_timeout+0x2e>
+  3e:	2001      	movs	r0, #1
+  40:	602e      	str	r6, [r5, #0]
+  42:	bcf8      	pop	{r3, r4, r5, r6, r7}
+  44:	bc02      	pop	{r1}
+  46:	4708      	bx	r1
+  48:	00000405 	.word	0x00000405
+
+Disassembly of section .text.wifi_card_read_mbox0_u32:
+
+00000000 <wifi_card_read_mbox0_u32>:
+   0:	b570      	push	{r4, r5, r6, lr}
+   2:	2401      	movs	r4, #1
+   4:	4809      	ldr	r0, [pc, #36]	@ (2c <wifi_card_read_mbox0_u32+0x2c>)
+   6:	f7ff fffe 	bl	0 <wifi_card_read_mbox0_u32>
+			6: R_ARM_THM_CALL	wifi_card_read_func1_u8
+   a:	4220      	tst	r0, r4
+   c:	d0fa      	beq.n	4 <wifi_card_read_mbox0_u32+0x4>
+   e:	2400      	movs	r4, #0
+  10:	0025      	movs	r5, r4
+  12:	20ff      	movs	r0, #255	@ 0xff
+  14:	f7ff fffe 	bl	0 <wifi_card_read_mbox0_u32>
+			14: R_ARM_THM_CALL	wifi_card_read_func1_u8
+  18:	40a0      	lsls	r0, r4
+  1a:	3408      	adds	r4, #8
+  1c:	4305      	orrs	r5, r0
+  1e:	2c20      	cmp	r4, #32
+  20:	d1f7      	bne.n	12 <wifi_card_read_mbox0_u32+0x12>
+  22:	0028      	movs	r0, r5
+  24:	bc70      	pop	{r4, r5, r6}
+  26:	bc02      	pop	{r1}
+  28:	4708      	bx	r1
+  2a:	46c0      	nop			@ (mov r8, r8)
+  2c:	00000405 	.word	0x00000405
+
+Disassembly of section .text.wifi_card_bmi_wait_count4:
+
+00000000 <ath6k_bmi_wait_count4>:
+   0:	b510      	push	{r4, lr}
+   2:	208a      	movs	r0, #138	@ 0x8a
+   4:	00c0      	lsls	r0, r0, #3
+   6:	f7ff fffe 	bl	0 <ath6k_bmi_wait_count4>
+			6: R_ARM_THM_CALL	wifi_card_read_func1_u8
+   a:	2800      	cmp	r0, #0
+   c:	d002      	beq.n	14 <ath6k_bmi_wait_count4+0x14>
+   e:	bc10      	pop	{r4}
+  10:	bc01      	pop	{r0}
+  12:	4700      	bx	r0
+  14:	2080      	movs	r0, #128	@ 0x80
+  16:	0040      	lsls	r0, r0, #1
+  18:	f7ff fffe 	bl	0 <ath6k_bmi_wait_count4>
+			18: R_ARM_THM_CALL	ioDelay
+  1c:	e7f1      	b.n	2 <ath6k_bmi_wait_count4+0x2>
+
+Disassembly of section .text.wifi_card_read_func1_u32:
+
+00000000 <SDIO_func1_read_u32>:
+   0:	b5f8      	push	{r3, r4, r5, r6, r7, lr}
+   2:	0007      	movs	r7, r0
+   4:	f7ff fffe 	bl	0 <SDIO_func1_read_u32>
+			4: R_ARM_THM_CALL	wifi_card_read_func1_u8
+   8:	0005      	movs	r5, r0
+   a:	1c78      	adds	r0, r7, #1
+   c:	f7ff fffe 	bl	0 <SDIO_func1_read_u32>
+			c: R_ARM_THM_CALL	wifi_card_read_func1_u8
+  10:	0204      	lsls	r4, r0, #8
+  12:	1cb8      	adds	r0, r7, #2
+  14:	f7ff fffe 	bl	0 <SDIO_func1_read_u32>
+			14: R_ARM_THM_CALL	wifi_card_read_func1_u8
+  18:	0006      	movs	r6, r0
+  1a:	1cf8      	adds	r0, r7, #3
+  1c:	f7ff fffe 	bl	0 <SDIO_func1_read_u32>
+			1c: R_ARM_THM_CALL	wifi_card_read_func1_u8
+  20:	432c      	orrs	r4, r5
+  22:	0200      	lsls	r0, r0, #8
+  24:	4330      	orrs	r0, r6
+  26:	0424      	lsls	r4, r4, #16
+  28:	0c24      	lsrs	r4, r4, #16
+  2a:	0400      	lsls	r0, r0, #16
+  2c:	4320      	orrs	r0, r4
+  2e:	bcf8      	pop	{r3, r4, r5, r6, r7}
+  30:	bc02      	pop	{r1}
+  32:	4708      	bx	r1
+
+Disassembly of section .text.wifi_card_write_func0_u8:
+
+00000000 <SDIO_func0_write_u8>:
+   0:	0240      	lsls	r0, r0, #9
+   2:	4308      	orrs	r0, r1
+   4:	2180      	movs	r1, #128	@ 0x80
+   6:	0609      	lsls	r1, r1, #24
+   8:	b510      	push	{r4, lr}
+   a:	4301      	orrs	r1, r0
+   c:	4804      	ldr	r0, [pc, #16]	@ (20 <SDIO_func0_write_u8+0x20>)
+   e:	f7ff fffe 	bl	0 <SDIO_func0_write_u8>
+			e: R_ARM_THM_CALL	wifi_card_send_command
+  12:	4b04      	ldr	r3, [pc, #16]	@ (24 <SDIO_func0_write_u8+0x24>)
+  14:	7fd8      	ldrb	r0, [r3, #31]
+  16:	0740      	lsls	r0, r0, #29
+  18:	17c0      	asrs	r0, r0, #31
+  1a:	bc10      	pop	{r4}
+  1c:	bc02      	pop	{r1}
+  1e:	4708      	bx	r1
+  20:	00000434 	.word	0x00000434
+  24:	00000005 	.word	0x00000005
+			24: R_ARM_ABS32	.bss.wlan_ctx
+
+Disassembly of section .text.wifi_card_write_func1_u8:
+
+00000000 <SDIO_func1_write_u8>:
+   0:	0240      	lsls	r0, r0, #9
+   2:	4308      	orrs	r0, r1
+   4:	2190      	movs	r1, #144	@ 0x90
+   6:	0609      	lsls	r1, r1, #24
+   8:	b510      	push	{r4, lr}
+   a:	4301      	orrs	r1, r0
+   c:	4804      	ldr	r0, [pc, #16]	@ (20 <SDIO_func1_write_u8+0x20>)
+   e:	f7ff fffe 	bl	0 <SDIO_func1_write_u8>
+			e: R_ARM_THM_CALL	wifi_card_send_command
+  12:	4b04      	ldr	r3, [pc, #16]	@ (24 <SDIO_func1_write_u8+0x24>)
+  14:	7fd8      	ldrb	r0, [r3, #31]
+  16:	0740      	lsls	r0, r0, #29
+  18:	17c0      	asrs	r0, r0, #31
+  1a:	bc10      	pop	{r4}
+  1c:	bc02      	pop	{r1}
+  1e:	4708      	bx	r1
+  20:	00000434 	.word	0x00000434
+  24:	00000005 	.word	0x00000005
+			24: R_ARM_ABS32	.bss.wlan_ctx
+
+Disassembly of section .text.wifi_card_write_mbox0_u32:
+
+00000000 <ath6k_mbox0_write_u32>:
+   0:	b570      	push	{r4, r5, r6, lr}
+   2:	0004      	movs	r4, r0
+   4:	000e      	movs	r6, r1
+   6:	2500      	movs	r5, #0
+   8:	2000      	movs	r0, #0
+   a:	2d03      	cmp	r5, #3
+   c:	d105      	bne.n	1a <ath6k_mbox0_write_u32+0x1a>
+   e:	0030      	movs	r0, r6
+  10:	1e43      	subs	r3, r0, #1
+  12:	4198      	sbcs	r0, r3
+  14:	4240      	negs	r0, r0
+  16:	0600      	lsls	r0, r0, #24
+  18:	0e00      	lsrs	r0, r0, #24
+  1a:	0621      	lsls	r1, r4, #24
+  1c:	0e09      	lsrs	r1, r1, #24
+  1e:	3501      	adds	r5, #1
+  20:	f7ff fffe 	bl	0 <ath6k_mbox0_write_u32>
+			20: R_ARM_THM_CALL	wifi_card_write_func1_u8
+  24:	0a24      	lsrs	r4, r4, #8
+  26:	2d04      	cmp	r5, #4
+  28:	d1ee      	bne.n	8 <ath6k_mbox0_write_u32+0x8>
+  2a:	bc70      	pop	{r4, r5, r6}
+  2c:	bc01      	pop	{r0}
+  2e:	4700      	bx	r0
+
+Disassembly of section .text.wifi_card_bmi_get_version:
+
+00000000 <ath6k_bmi_get_version>:
+   0:	b573      	push	{r0, r1, r4, r5, r6, lr}
+   2:	2500      	movs	r5, #0
+   4:	2101      	movs	r1, #1
+   6:	2008      	movs	r0, #8
+   8:	f7ff fffe 	bl	0 <ath6k_bmi_get_version>
+			8: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+   c:	210a      	movs	r1, #10
+   e:	a801      	add	r0, sp, #4
+  10:	9501      	str	r5, [sp, #4]
+  12:	f7ff fffe 	bl	0 <ath6k_bmi_get_version>
+			12: R_ARM_THM_CALL	wifi_card_read_mbox0_u32_timeout
+  16:	42a8      	cmp	r0, r5
+  18:	d017      	beq.n	4a <ath6k_bmi_get_version+0x4a>
+  1a:	9c01      	ldr	r4, [sp, #4]
+  1c:	1c63      	adds	r3, r4, #1
+  1e:	d10c      	bne.n	3a <ath6k_bmi_get_version+0x3a>
+  20:	f7ff fffe 	bl	0 <ath6k_bmi_get_version>
+			20: R_ARM_THM_CALL	wifi_card_read_mbox0_u32
+  24:	0004      	movs	r4, r0
+  26:	1c43      	adds	r3, r0, #1
+  28:	d007      	beq.n	3a <ath6k_bmi_get_version+0x3a>
+  2a:	f7ff fffe 	bl	0 <ath6k_bmi_get_version>
+			2a: R_ARM_THM_CALL	wifi_card_read_mbox0_u32
+  2e:	0006      	movs	r6, r0
+  30:	08a4      	lsrs	r4, r4, #2
+  32:	3c02      	subs	r4, #2
+  34:	42ac      	cmp	r4, r5
+  36:	d804      	bhi.n	42 <ath6k_bmi_get_version+0x42>
+  38:	0034      	movs	r4, r6
+  3a:	0020      	movs	r0, r4
+  3c:	bc76      	pop	{r1, r2, r4, r5, r6}
+  3e:	bc02      	pop	{r1}
+  40:	4708      	bx	r1
+  42:	f7ff fffe 	bl	0 <ath6k_bmi_get_version>
+			42: R_ARM_THM_CALL	wifi_card_read_mbox0_u32
+  46:	3501      	adds	r5, #1
+  48:	e7f4      	b.n	34 <ath6k_bmi_get_version+0x34>
+  4a:	2401      	movs	r4, #1
+  4c:	4264      	negs	r4, r4
+  4e:	e7f4      	b.n	3a <ath6k_bmi_get_version+0x3a>
+
+Disassembly of section .text.wifi_card_bmi_read_register:
+
+00000000 <ath6k_bmi_read_register>:
+   0:	b510      	push	{r4, lr}
+   2:	0004      	movs	r4, r0
+   4:	2100      	movs	r1, #0
+   6:	2006      	movs	r0, #6
+   8:	f7ff fffe 	bl	0 <ath6k_bmi_read_register>
+			8: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+   c:	2101      	movs	r1, #1
+   e:	0020      	movs	r0, r4
+  10:	f7ff fffe 	bl	0 <ath6k_bmi_read_register>
+			10: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  14:	f7ff fffe 	bl	0 <ath6k_bmi_read_register>
+			14: R_ARM_THM_CALL	wifi_card_read_mbox0_u32
+  18:	bc10      	pop	{r4}
+  1a:	bc02      	pop	{r1}
+  1c:	4708      	bx	r1
+
+Disassembly of section .text.wifi_card_bmi_write_register:
+
+00000000 <ath6k_bmi_write_register>:
+   0:	b570      	push	{r4, r5, r6, lr}
+   2:	0005      	movs	r5, r0
+   4:	000c      	movs	r4, r1
+   6:	2007      	movs	r0, #7
+   8:	2100      	movs	r1, #0
+   a:	f7ff fffe 	bl	0 <ath6k_bmi_write_register>
+			a: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+   e:	0028      	movs	r0, r5
+  10:	2100      	movs	r1, #0
+  12:	f7ff fffe 	bl	0 <ath6k_bmi_write_register>
+			12: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  16:	2101      	movs	r1, #1
+  18:	0020      	movs	r0, r4
+  1a:	f7ff fffe 	bl	0 <ath6k_bmi_write_register>
+			1a: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  1e:	bc70      	pop	{r4, r5, r6}
+  20:	bc01      	pop	{r0}
+  22:	4700      	bx	r0
+
+Disassembly of section .text.wifi_card_bmi_start_firmware:
+
+00000000 <ath6k_bmi_start_firmware>:
+   0:	2101      	movs	r1, #1
+   2:	b510      	push	{r4, lr}
+   4:	0008      	movs	r0, r1
+   6:	f7ff fffe 	bl	0 <ath6k_bmi_start_firmware>
+			6: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+   a:	bc10      	pop	{r4}
+   c:	bc01      	pop	{r0}
+   e:	4700      	bx	r0
+
+Disassembly of section .text.wifi_card_bmi_set_entrypoint:
+
+00000000 <ath6k_bmi_set_entrypoint>:
+   0:	b510      	push	{r4, lr}
+   2:	0004      	movs	r4, r0
+   4:	2100      	movs	r1, #0
+   6:	2005      	movs	r0, #5
+   8:	f7ff fffe 	bl	0 <ath6k_bmi_set_entrypoint>
+			8: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+   c:	2101      	movs	r1, #1
+   e:	0020      	movs	r0, r4
+  10:	f7ff fffe 	bl	0 <ath6k_bmi_set_entrypoint>
+			10: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  14:	bc10      	pop	{r4}
+  16:	bc01      	pop	{r0}
+  18:	4700      	bx	r0
+
+Disassembly of section .text.wifi_card_bmi_execute:
+
+00000000 <ath6k_bmi_execute>:
+   0:	b537      	push	{r0, r1, r2, r4, r5, lr}
+   2:	0005      	movs	r5, r0
+   4:	000c      	movs	r4, r1
+   6:	2004      	movs	r0, #4
+   8:	2100      	movs	r1, #0
+   a:	f7ff fffe 	bl	0 <ath6k_bmi_execute>
+			a: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+   e:	0028      	movs	r0, r5
+  10:	2100      	movs	r1, #0
+  12:	f7ff fffe 	bl	0 <ath6k_bmi_execute>
+			12: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  16:	0020      	movs	r0, r4
+  18:	2101      	movs	r1, #1
+  1a:	f7ff fffe 	bl	0 <ath6k_bmi_execute>
+			1a: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  1e:	2301      	movs	r3, #1
+  20:	21c8      	movs	r1, #200	@ 0xc8
+  22:	425b      	negs	r3, r3
+  24:	a801      	add	r0, sp, #4
+  26:	9301      	str	r3, [sp, #4]
+  28:	f7ff fffe 	bl	0 <ath6k_bmi_execute>
+			28: R_ARM_THM_CALL	wifi_card_read_mbox0_u32_timeout
+  2c:	9801      	ldr	r0, [sp, #4]
+  2e:	bc3e      	pop	{r1, r2, r3, r4, r5}
+  30:	bc02      	pop	{r1}
+  32:	4708      	bx	r1
+
+Disassembly of section .text.wifi_card_write_func1_u32:
+
+00000000 <SDIO_func1_write_u32>:
+   0:	b570      	push	{r4, r5, r6, lr}
+   2:	0005      	movs	r5, r0
+   4:	000c      	movs	r4, r1
+   6:	0c0e      	lsrs	r6, r1, #16
+   8:	3003      	adds	r0, #3
+   a:	0e09      	lsrs	r1, r1, #24
+   c:	f7ff fffe 	bl	0 <SDIO_func1_write_u32>
+			c: R_ARM_THM_CALL	wifi_card_write_func1_u8
+  10:	0631      	lsls	r1, r6, #24
+  12:	1ca8      	adds	r0, r5, #2
+  14:	0e09      	lsrs	r1, r1, #24
+  16:	f7ff fffe 	bl	0 <SDIO_func1_write_u32>
+			16: R_ARM_THM_CALL	wifi_card_write_func1_u8
+  1a:	0421      	lsls	r1, r4, #16
+  1c:	1c68      	adds	r0, r5, #1
+  1e:	0e09      	lsrs	r1, r1, #24
+  20:	f7ff fffe 	bl	0 <SDIO_func1_write_u32>
+			20: R_ARM_THM_CALL	wifi_card_write_func1_u8
+  24:	0621      	lsls	r1, r4, #24
+  26:	0028      	movs	r0, r5
+  28:	0e09      	lsrs	r1, r1, #24
+  2a:	f7ff fffe 	bl	0 <SDIO_func1_write_u32>
+			2a: R_ARM_THM_CALL	wifi_card_write_func1_u8
+  2e:	bc70      	pop	{r4, r5, r6}
+  30:	bc01      	pop	{r0}
+  32:	4700      	bx	r0
+
+Disassembly of section .text.wifi_card_read_intern_word:
+
+00000000 <ath6k_read_intern_word>:
+   0:	b510      	push	{r4, lr}
+   2:	0001      	movs	r1, r0
+   4:	4804      	ldr	r0, [pc, #16]	@ (18 <ath6k_read_intern_word+0x18>)
+   6:	f7ff fffe 	bl	0 <ath6k_read_intern_word>
+			6: R_ARM_THM_CALL	wifi_card_write_func1_u32
+   a:	4804      	ldr	r0, [pc, #16]	@ (1c <ath6k_read_intern_word+0x1c>)
+   c:	f7ff fffe 	bl	0 <ath6k_read_intern_word>
+			c: R_ARM_THM_CALL	wifi_card_read_func1_u32
+  10:	bc10      	pop	{r4}
+  12:	bc02      	pop	{r1}
+  14:	4708      	bx	r1
+  16:	46c0      	nop			@ (mov r8, r8)
+  18:	0000047c 	.word	0x0000047c
+  1c:	00000474 	.word	0x00000474
+
+Disassembly of section .text.wifi_card_write_intern_word:
+
+00000000 <ath6k_write_intern_word>:
+   0:	b510      	push	{r4, lr}
+   2:	0004      	movs	r4, r0
+   4:	4805      	ldr	r0, [pc, #20]	@ (1c <ath6k_write_intern_word+0x1c>)
+   6:	f7ff fffe 	bl	0 <ath6k_write_intern_word>
+			6: R_ARM_THM_CALL	wifi_card_write_func1_u32
+   a:	208f      	movs	r0, #143	@ 0x8f
+   c:	0021      	movs	r1, r4
+   e:	00c0      	lsls	r0, r0, #3
+  10:	f7ff fffe 	bl	0 <ath6k_write_intern_word>
+			10: R_ARM_THM_CALL	wifi_card_write_func1_u32
+  14:	bc10      	pop	{r4}
+  16:	bc01      	pop	{r0}
+  18:	4700      	bx	r0
+  1a:	46c0      	nop			@ (mov r8, r8)
+  1c:	00000474 	.word	0x00000474
+
+Disassembly of section .text.wifi_card_bmi_write_memory:
+
+00000000 <ath6k_bmi_write_memory>:
+   0:	b5f0      	push	{r4, r5, r6, r7, lr}
+   2:	2300      	movs	r3, #0
+   4:	2703      	movs	r7, #3
+   6:	b087      	sub	sp, #28
+   8:	9005      	str	r0, [sp, #20]
+   a:	9104      	str	r1, [sp, #16]
+   c:	9201      	str	r2, [sp, #4]
+   e:	9a01      	ldr	r2, [sp, #4]
+  10:	429a      	cmp	r2, r3
+  12:	d803      	bhi.n	1c <ath6k_bmi_write_memory+0x1c>
+  14:	b007      	add	sp, #28
+  16:	bcf0      	pop	{r4, r5, r6, r7}
+  18:	bc01      	pop	{r0}
+  1a:	4700      	bx	r0
+  1c:	001a      	movs	r2, r3
+  1e:	32f1      	adds	r2, #241	@ 0xf1
+  20:	32ff      	adds	r2, #255	@ 0xff
+  22:	9203      	str	r2, [sp, #12]
+  24:	9903      	ldr	r1, [sp, #12]
+  26:	9a01      	ldr	r2, [sp, #4]
+  28:	1ad6      	subs	r6, r2, r3
+  2a:	428a      	cmp	r2, r1
+  2c:	d301      	bcc.n	32 <ath6k_bmi_write_memory+0x32>
+  2e:	26f8      	movs	r6, #248	@ 0xf8
+  30:	0076      	lsls	r6, r6, #1
+  32:	9a05      	ldr	r2, [sp, #20]
+  34:	18d5      	adds	r5, r2, r3
+  36:	9a04      	ldr	r2, [sp, #16]
+  38:	18d2      	adds	r2, r2, r3
+  3a:	9202      	str	r2, [sp, #8]
+  3c:	2e04      	cmp	r6, #4
+  3e:	d109      	bne.n	54 <ath6k_bmi_write_memory+0x54>
+  40:	2400      	movs	r4, #0
+  42:	423a      	tst	r2, r7
+  44:	d10c      	bne.n	60 <ath6k_bmi_write_memory+0x60>
+  46:	9a04      	ldr	r2, [sp, #16]
+  48:	0028      	movs	r0, r5
+  4a:	58d1      	ldr	r1, [r2, r3]
+  4c:	f7ff fffe 	bl	0 <ath6k_bmi_write_memory>
+			4c: R_ARM_THM_CALL	wifi_card_write_intern_word
+  50:	9b03      	ldr	r3, [sp, #12]
+  52:	e7dc      	b.n	e <ath6k_bmi_write_memory+0xe>
+  54:	0034      	movs	r4, r6
+  56:	403c      	ands	r4, r7
+  58:	423e      	tst	r6, r7
+  5a:	d001      	beq.n	60 <ath6k_bmi_write_memory+0x60>
+  5c:	2304      	movs	r3, #4
+  5e:	1b1c      	subs	r4, r3, r4
+  60:	2100      	movs	r1, #0
+  62:	0038      	movs	r0, r7
+  64:	f7ff fffe 	bl	0 <ath6k_bmi_write_memory>
+			64: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  68:	1934      	adds	r4, r6, r4
+  6a:	0028      	movs	r0, r5
+  6c:	2100      	movs	r1, #0
+  6e:	f7ff fffe 	bl	0 <ath6k_bmi_write_memory>
+			6e: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  72:	2100      	movs	r1, #0
+  74:	0020      	movs	r0, r4
+  76:	f7ff fffe 	bl	0 <ath6k_bmi_write_memory>
+			76: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  7a:	2500      	movs	r5, #0
+  7c:	42ac      	cmp	r4, r5
+  7e:	d0e7      	beq.n	50 <ath6k_bmi_write_memory+0x50>
+  80:	2100      	movs	r1, #0
+  82:	1e63      	subs	r3, r4, #1
+  84:	42ae      	cmp	r6, r5
+  86:	d901      	bls.n	8c <ath6k_bmi_write_memory+0x8c>
+  88:	9a02      	ldr	r2, [sp, #8]
+  8a:	5d51      	ldrb	r1, [r2, r5]
+  8c:	2000      	movs	r0, #0
+  8e:	42ab      	cmp	r3, r5
+  90:	d100      	bne.n	94 <ath6k_bmi_write_memory+0x94>
+  92:	30ff      	adds	r0, #255	@ 0xff
+  94:	f7ff fffe 	bl	0 <ath6k_bmi_write_memory>
+			94: R_ARM_THM_CALL	wifi_card_write_func1_u8
+  98:	3501      	adds	r5, #1
+  9a:	e7ef      	b.n	7c <ath6k_bmi_write_memory+0x7c>
+
+Disassembly of section .text.wifi_card_send_command_alt:
+
+00000000 <wifi_card_send_command_alt>:
+   0:	b510      	push	{r4, lr}
+   2:	000a      	movs	r2, r1
+   4:	0001      	movs	r1, r0
+   6:	4803      	ldr	r0, [pc, #12]	@ (14 <wifi_card_send_command_alt+0x14>)
+   8:	f7ff fffe 	bl	0 <wifi_sdio_send_command>
+			8: R_ARM_THM_CALL	wifi_sdio_send_command
+   c:	bc10      	pop	{r4}
+   e:	bc01      	pop	{r0}
+  10:	4700      	bx	r0
+  12:	46c0      	nop			@ (mov r8, r8)
+  14:	00000000 	.word	0x00000000
+			14: R_ARM_ABS32	.bss.wlan_ctx
+
+Disassembly of section .text.wifi_card_bmi_read_memory:
+
+00000000 <ath6k_bmi_read_memory>:
+   0:	b5f0      	push	{r4, r5, r6, r7, lr}
+   2:	0017      	movs	r7, r2
+   4:	2400      	movs	r4, #0
+   6:	b085      	sub	sp, #20
+   8:	9003      	str	r0, [sp, #12]
+   a:	9100      	str	r1, [sp, #0]
+   c:	9b00      	ldr	r3, [sp, #0]
+   e:	42a3      	cmp	r3, r4
+  10:	d803      	bhi.n	1a <ath6k_bmi_read_memory+0x1a>
+  12:	b005      	add	sp, #20
+  14:	bcf0      	pop	{r4, r5, r6, r7}
+  16:	bc01      	pop	{r0}
+  18:	4700      	bx	r0
+  1a:	0023      	movs	r3, r4
+  1c:	33f1      	adds	r3, #241	@ 0xf1
+  1e:	33ff      	adds	r3, #255	@ 0xff
+  20:	9301      	str	r3, [sp, #4]
+  22:	9b03      	ldr	r3, [sp, #12]
+  24:	9a01      	ldr	r2, [sp, #4]
+  26:	191d      	adds	r5, r3, r4
+  28:	9b00      	ldr	r3, [sp, #0]
+  2a:	4293      	cmp	r3, r2
+  2c:	d321      	bcc.n	72 <ath6k_bmi_read_memory+0x72>
+  2e:	24f8      	movs	r4, #248	@ 0xf8
+  30:	2600      	movs	r6, #0
+  32:	0064      	lsls	r4, r4, #1
+  34:	2100      	movs	r1, #0
+  36:	2002      	movs	r0, #2
+  38:	f7ff fffe 	bl	0 <ath6k_bmi_read_memory>
+			38: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  3c:	0028      	movs	r0, r5
+  3e:	003d      	movs	r5, r7
+  40:	2100      	movs	r1, #0
+  42:	1936      	adds	r6, r6, r4
+  44:	f7ff fffe 	bl	0 <ath6k_bmi_read_memory>
+			44: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  48:	2101      	movs	r1, #1
+  4a:	0030      	movs	r0, r6
+  4c:	f7ff fffe 	bl	0 <ath6k_bmi_read_memory>
+			4c: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  50:	193b      	adds	r3, r7, r4
+  52:	9302      	str	r3, [sp, #8]
+  54:	20ff      	movs	r0, #255	@ 0xff
+  56:	f7ff fffe 	bl	0 <ath6k_bmi_read_memory>
+			56: R_ARM_THM_CALL	wifi_card_read_func1_u8
+  5a:	9b02      	ldr	r3, [sp, #8]
+  5c:	7028      	strb	r0, [r5, #0]
+  5e:	3501      	adds	r5, #1
+  60:	42ab      	cmp	r3, r5
+  62:	d1f7      	bne.n	54 <ath6k_bmi_read_memory+0x54>
+  64:	42a6      	cmp	r6, r4
+  66:	d91f      	bls.n	a8 <ath6k_bmi_read_memory+0xa8>
+  68:	20ff      	movs	r0, #255	@ 0xff
+  6a:	f7ff fffe 	bl	0 <ath6k_bmi_read_memory>
+			6a: R_ARM_THM_CALL	wifi_card_read_func1_u8
+  6e:	3401      	adds	r4, #1
+  70:	e7f8      	b.n	64 <ath6k_bmi_read_memory+0x64>
+  72:	9b00      	ldr	r3, [sp, #0]
+  74:	1b1c      	subs	r4, r3, r4
+  76:	2c04      	cmp	r4, #4
+  78:	d11a      	bne.n	b0 <ath6k_bmi_read_memory+0xb0>
+  7a:	0029      	movs	r1, r5
+  7c:	4810      	ldr	r0, [pc, #64]	@ (c0 <ath6k_bmi_read_memory+0xc0>)
+  7e:	f7ff fffe 	bl	0 <ath6k_bmi_read_memory>
+			7e: R_ARM_THM_CALL	wifi_card_write_func1_u32
+  82:	4d10      	ldr	r5, [pc, #64]	@ (c4 <ath6k_bmi_read_memory+0xc4>)
+  84:	002b      	movs	r3, r5
+  86:	2201      	movs	r2, #1
+  88:	3332      	adds	r3, #50	@ 0x32
+  8a:	701a      	strb	r2, [r3, #0]
+  8c:	4e0e      	ldr	r6, [pc, #56]	@ (c8 <ath6k_bmi_read_memory+0xc8>)
+  8e:	8e2b      	ldrh	r3, [r5, #48]	@ 0x30
+  90:	490e      	ldr	r1, [pc, #56]	@ (cc <ath6k_bmi_read_memory+0xcc>)
+  92:	480f      	ldr	r0, [pc, #60]	@ (d0 <ath6k_bmi_read_memory+0xd0>)
+  94:	9302      	str	r3, [sp, #8]
+  96:	60ee      	str	r6, [r5, #12]
+  98:	612c      	str	r4, [r5, #16]
+  9a:	862c      	strh	r4, [r5, #48]	@ 0x30
+  9c:	f7ff fffe 	bl	0 <ath6k_bmi_read_memory>
+			9c: R_ARM_THM_CALL	wifi_card_send_command_alt
+  a0:	9b02      	ldr	r3, [sp, #8]
+  a2:	862b      	strh	r3, [r5, #48]	@ 0x30
+  a4:	6833      	ldr	r3, [r6, #0]
+  a6:	603b      	str	r3, [r7, #0]
+  a8:	37f1      	adds	r7, #241	@ 0xf1
+  aa:	9c01      	ldr	r4, [sp, #4]
+  ac:	37ff      	adds	r7, #255	@ 0xff
+  ae:	e7ad      	b.n	c <ath6k_bmi_read_memory+0xc>
+  b0:	2603      	movs	r6, #3
+  b2:	2303      	movs	r3, #3
+  b4:	4026      	ands	r6, r4
+  b6:	421c      	tst	r4, r3
+  b8:	d0bc      	beq.n	34 <ath6k_bmi_read_memory+0x34>
+  ba:	3301      	adds	r3, #1
+  bc:	1b9e      	subs	r6, r3, r6
+  be:	e7b9      	b.n	34 <ath6k_bmi_read_memory+0x34>
+  c0:	0000047c 	.word	0x0000047c
+	...
+			c4: R_ARM_ABS32	.bss.wlan_ctx
+			c8: R_ARM_ABS32	.bss.wifi_card_alignedbuf_small
+  cc:	1408e804 	.word	0x1408e804
+  d0:	00005c35 	.word	0x00005c35
+
+Disassembly of section .text.wifi_card_mbox0_sendbytes:
+
+00000000 <ath6k_mbox0_sendbytes>:
+   0:	2380      	movs	r3, #128	@ 0x80
+   2:	b5f7      	push	{r0, r1, r2, r4, r5, r6, r7, lr}
+   4:	01db      	lsls	r3, r3, #7
+   6:	1a5c      	subs	r4, r3, r1
+   8:	4b22      	ldr	r3, [pc, #136]	@ (94 <ath6k_mbox0_sendbytes+0x94>)
+   a:	9300      	str	r3, [sp, #0]
+   c:	781b      	ldrb	r3, [r3, #0]
+   e:	0424      	lsls	r4, r4, #16
+  10:	0005      	movs	r5, r0
+  12:	000e      	movs	r6, r1
+  14:	4f20      	ldr	r7, [pc, #128]	@ (98 <ath6k_mbox0_sendbytes+0x98>)
+  16:	0c24      	lsrs	r4, r4, #16
+  18:	2b00      	cmp	r3, #0
+  1a:	d017      	beq.n	4c <ath6k_mbox0_sendbytes+0x4c>
+  1c:	1846      	adds	r6, r0, r1
+  1e:	42ae      	cmp	r6, r5
+  20:	d106      	bne.n	30 <ath6k_mbox0_sendbytes+0x30>
+  22:	2080      	movs	r0, #128	@ 0x80
+  24:	00c0      	lsls	r0, r0, #3
+  26:	f7ff fffe 	bl	0 <ath6k_mbox0_sendbytes>
+			26: R_ARM_THM_CALL	wifi_card_read_func1_u32
+  2a:	bcf7      	pop	{r0, r1, r2, r4, r5, r6, r7}
+  2c:	bc01      	pop	{r0}
+  2e:	4700      	bx	r0
+  30:	0020      	movs	r0, r4
+  32:	7829      	ldrb	r1, [r5, #0]
+  34:	f7ff fffe 	bl	0 <ath6k_mbox0_sendbytes>
+			34: R_ARM_THM_CALL	wifi_card_write_func1_u8
+  38:	3401      	adds	r4, #1
+  3a:	4b18      	ldr	r3, [pc, #96]	@ (9c <ath6k_mbox0_sendbytes+0x9c>)
+  3c:	0424      	lsls	r4, r4, #16
+  3e:	0c24      	lsrs	r4, r4, #16
+  40:	429c      	cmp	r4, r3
+  42:	d901      	bls.n	48 <ath6k_mbox0_sendbytes+0x48>
+  44:	24fe      	movs	r4, #254	@ 0xfe
+  46:	01a4      	lsls	r4, r4, #6
+  48:	3501      	adds	r5, #1
+  4a:	e7e8      	b.n	1e <ath6k_mbox0_sendbytes+0x1e>
+  4c:	f7ff fffe 	bl	0 <wifi_ndma_wait>
+			4c: R_ARM_THM_CALL	wifi_ndma_wait
+  50:	f7ff fffe 	bl	0 <wifi_sdio_stop>
+			50: R_ARM_THM_CALL	wifi_sdio_stop
+  54:	8e39      	ldrh	r1, [r7, #48]	@ 0x30
+  56:	0030      	movs	r0, r6
+  58:	60fd      	str	r5, [r7, #12]
+  5a:	613e      	str	r6, [r7, #16]
+  5c:	f7ff fffe 	bl	0 <__aeabi_uidiv>
+			5c: R_ARM_THM_CALL	__aeabi_uidiv
+  60:	2280      	movs	r2, #128	@ 0x80
+  62:	219c      	movs	r1, #156	@ 0x9c
+  64:	4b0e      	ldr	r3, [pc, #56]	@ (a0 <ath6k_mbox0_sendbytes+0xa0>)
+  66:	0600      	lsls	r0, r0, #24
+  68:	0e00      	lsrs	r0, r0, #24
+  6a:	0264      	lsls	r4, r4, #9
+  6c:	01d2      	lsls	r2, r2, #7
+  6e:	431a      	orrs	r2, r3
+  70:	4320      	orrs	r0, r4
+  72:	0609      	lsls	r1, r1, #24
+  74:	4301      	orrs	r1, r0
+  76:	0010      	movs	r0, r2
+  78:	9201      	str	r2, [sp, #4]
+  7a:	f7ff fffe 	bl	0 <ath6k_mbox0_sendbytes>
+			7a: R_ARM_THM_CALL	wifi_card_send_command_alt
+  7e:	f7ff fffe 	bl	0 <wifi_ndma_wait>
+			7e: R_ARM_THM_CALL	wifi_ndma_wait
+  82:	2800      	cmp	r0, #0
+  84:	d102      	bne.n	8c <ath6k_mbox0_sendbytes+0x8c>
+  86:	2301      	movs	r3, #1
+  88:	9a00      	ldr	r2, [sp, #0]
+  8a:	7013      	strb	r3, [r2, #0]
+  8c:	f7ff fffe 	bl	0 <wifi_sdio_stop>
+			8c: R_ARM_THM_CALL	wifi_sdio_stop
+  90:	e7c7      	b.n	22 <ath6k_mbox0_sendbytes+0x22>
+  92:	46c0      	nop			@ (mov r8, r8)
+  94:	00000034 	.word	0x00000034
+			94: R_ARM_ABS32	.bss.wlan_ctx
+  98:	00000000 	.word	0x00000000
+			98: R_ARM_ABS32	.bss.wlan_ctx
+  9c:	00003fff 	.word	0x00003fff
+  a0:	00002c35 	.word	0x00002c35
+
+Disassembly of section .text.wifi_card_mbox0_send_packet:
+
+00000000 <wifi_card_mbox0_send_packet>:
+   0:	b570      	push	{r4, r5, r6, lr}
+   2:	0016      	movs	r6, r2
+   4:	aa04      	add	r2, sp, #16
+   6:	4d0f      	ldr	r5, [pc, #60]	@ (44 <wifi_card_mbox0_send_packet+0x44>)
+   8:	8812      	ldrh	r2, [r2, #0]
+   a:	80aa      	strh	r2, [r5, #4]
+   c:	4a0e      	ldr	r2, [pc, #56]	@ (48 <wifi_card_mbox0_send_packet+0x48>)
+   e:	7028      	strb	r0, [r5, #0]
+  10:	7069      	strb	r1, [r5, #1]
+  12:	806b      	strh	r3, [r5, #2]
+  14:	1c1c      	adds	r4, r3, #0
+  16:	4293      	cmp	r3, r2
+  18:	d900      	bls.n	1c <wifi_card_mbox0_send_packet+0x1c>
+  1a:	1c14      	adds	r4, r2, #0
+  1c:	0424      	lsls	r4, r4, #16
+  1e:	0c24      	lsrs	r4, r4, #16
+  20:	2e00      	cmp	r6, #0
+  22:	d004      	beq.n	2e <wifi_card_mbox0_send_packet+0x2e>
+  24:	0022      	movs	r2, r4
+  26:	0031      	movs	r1, r6
+  28:	4808      	ldr	r0, [pc, #32]	@ (4c <wifi_card_mbox0_send_packet+0x4c>)
+  2a:	f7ff fffe 	bl	0 <memcpy>
+			2a: R_ARM_THM_CALL	memcpy
+  2e:	237f      	movs	r3, #127	@ 0x7f
+  30:	3485      	adds	r4, #133	@ 0x85
+  32:	439c      	bics	r4, r3
+  34:	0421      	lsls	r1, r4, #16
+  36:	0028      	movs	r0, r5
+  38:	1409      	asrs	r1, r1, #16
+  3a:	f7ff fffe 	bl	0 <wifi_card_mbox0_send_packet>
+			3a: R_ARM_THM_CALL	wifi_card_mbox0_sendbytes
+  3e:	bc70      	pop	{r4, r5, r6}
+  40:	bc01      	pop	{r0}
+  42:	4700      	bx	r0
+  44:	00000000 	.word	0x00000000
+			44: R_ARM_ABS32	.bss.mbox_out_buffer
+  48:	000005fa 	.word	0x000005fa
+  4c:	00000006 	.word	0x00000006
+			4c: R_ARM_ABS32	.bss.mbox_out_buffer
+
+Disassembly of section .text.data_send_pkt:
+
+00000000 <data_send_pkt>:
+   0:	b537      	push	{r0, r1, r2, r4, r5, lr}
+   2:	040b      	lsls	r3, r1, #16
+   4:	2100      	movs	r1, #0
+   6:	4c06      	ldr	r4, [pc, #24]	@ (20 <data_send_pkt+0x20>)
+   8:	6825      	ldr	r5, [r4, #0]
+   a:	0002      	movs	r2, r0
+   c:	6021      	str	r1, [r4, #0]
+   e:	2002      	movs	r0, #2
+  10:	9100      	str	r1, [sp, #0]
+  12:	0c1b      	lsrs	r3, r3, #16
+  14:	f7ff fffe 	bl	0 <data_send_pkt>
+			14: R_ARM_THM_CALL	wifi_card_mbox0_send_packet
+  18:	6025      	str	r5, [r4, #0]
+  1a:	bc37      	pop	{r0, r1, r2, r4, r5}
+  1c:	bc01      	pop	{r0}
+  1e:	4700      	bx	r0
+  20:	04000208 	.word	0x04000208
+
+Disassembly of section .text.data_send_pkt_idk:
+
+00000000 <data_send_pkt_idk>:
+   0:	b537      	push	{r0, r1, r2, r4, r5, lr}
+   2:	040b      	lsls	r3, r1, #16
+   4:	2100      	movs	r1, #0
+   6:	4c07      	ldr	r4, [pc, #28]	@ (24 <data_send_pkt_idk+0x24>)
+   8:	0002      	movs	r2, r0
+   a:	4807      	ldr	r0, [pc, #28]	@ (28 <data_send_pkt_idk+0x28>)
+   c:	6825      	ldr	r5, [r4, #0]
+   e:	0c1b      	lsrs	r3, r3, #16
+  10:	6021      	str	r1, [r4, #0]
+  12:	9000      	str	r0, [sp, #0]
+  14:	2002      	movs	r0, #2
+  16:	f7ff fffe 	bl	0 <data_send_pkt_idk>
+			16: R_ARM_THM_CALL	wifi_card_mbox0_send_packet
+  1a:	6025      	str	r5, [r4, #0]
+  1c:	bc37      	pop	{r0, r1, r2, r4, r5}
+  1e:	bc01      	pop	{r0}
+  20:	4700      	bx	r0
+  22:	46c0      	nop			@ (mov r8, r8)
+  24:	04000208 	.word	0x04000208
+  28:	00002008 	.word	0x00002008
+
+Disassembly of section .text.wmi_send_pkt:
+
+00000000 <wmi_send_pkt>:
+   0:	b5f8      	push	{r3, r4, r5, r6, r7, lr}
+   2:	000c      	movs	r4, r1
+   4:	0011      	movs	r1, r2
+   6:	2200      	movs	r2, #0
+   8:	4e13      	ldr	r6, [pc, #76]	@ (58 <wmi_send_pkt+0x58>)
+   a:	4d14      	ldr	r5, [pc, #80]	@ (5c <wmi_send_pkt+0x5c>)
+   c:	6837      	ldr	r7, [r6, #0]
+   e:	6032      	str	r2, [r6, #0]
+  10:	3201      	adds	r2, #1
+  12:	702a      	strb	r2, [r5, #0]
+  14:	1c9a      	adds	r2, r3, #2
+  16:	806a      	strh	r2, [r5, #2]
+  18:	4a11      	ldr	r2, [pc, #68]	@ (60 <wmi_send_pkt+0x60>)
+  1a:	8812      	ldrh	r2, [r2, #0]
+  1c:	80aa      	strh	r2, [r5, #4]
+  1e:	22bf      	movs	r2, #191	@ 0xbf
+  20:	706c      	strb	r4, [r5, #1]
+  22:	80e8      	strh	r0, [r5, #6]
+  24:	1c1c      	adds	r4, r3, #0
+  26:	00d2      	lsls	r2, r2, #3
+  28:	4293      	cmp	r3, r2
+  2a:	d900      	bls.n	2e <wmi_send_pkt+0x2e>
+  2c:	1c14      	adds	r4, r2, #0
+  2e:	0424      	lsls	r4, r4, #16
+  30:	0c24      	lsrs	r4, r4, #16
+  32:	2900      	cmp	r1, #0
+  34:	d003      	beq.n	3e <wmi_send_pkt+0x3e>
+  36:	0022      	movs	r2, r4
+  38:	480a      	ldr	r0, [pc, #40]	@ (64 <wmi_send_pkt+0x64>)
+  3a:	f7ff fffe 	bl	0 <memcpy>
+			3a: R_ARM_THM_CALL	memcpy
+  3e:	237f      	movs	r3, #127	@ 0x7f
+  40:	3487      	adds	r4, #135	@ 0x87
+  42:	439c      	bics	r4, r3
+  44:	0421      	lsls	r1, r4, #16
+  46:	0028      	movs	r0, r5
+  48:	1409      	asrs	r1, r1, #16
+  4a:	f7ff fffe 	bl	0 <wmi_send_pkt>
+			4a: R_ARM_THM_CALL	wifi_card_mbox0_sendbytes
+  4e:	6037      	str	r7, [r6, #0]
+  50:	bcf8      	pop	{r3, r4, r5, r6, r7}
+  52:	bc01      	pop	{r0}
+  54:	4700      	bx	r0
+  56:	46c0      	nop			@ (mov r8, r8)
+  58:	04000208 	.word	0x04000208
+	...
+			5c: R_ARM_ABS32	.bss.mbox_out_buffer
+			60: R_ARM_ABS32	wmi_idk
+  64:	00000008 	.word	0x00000008
+			64: R_ARM_ABS32	.bss.mbox_out_buffer
+
+Disassembly of section .text.wifi_card_bmi_lz_upload:
+
+00000000 <ath6k_bmi_lz_upload>:
+   0:	b5f0      	push	{r4, r5, r6, r7, lr}
+   2:	0004      	movs	r4, r0
+   4:	b085      	sub	sp, #20
+   6:	200d      	movs	r0, #13
+   8:	9103      	str	r1, [sp, #12]
+   a:	2100      	movs	r1, #0
+   c:	0017      	movs	r7, r2
+   e:	f7ff fffe 	bl	0 <ath6k_bmi_lz_upload>
+			e: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  12:	2101      	movs	r1, #1
+  14:	0020      	movs	r0, r4
+  16:	f7ff fffe 	bl	0 <ath6k_bmi_lz_upload>
+			16: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  1a:	2300      	movs	r3, #0
+  1c:	429f      	cmp	r7, r3
+  1e:	d803      	bhi.n	28 <ath6k_bmi_lz_upload+0x28>
+  20:	b005      	add	sp, #20
+  22:	bcf0      	pop	{r4, r5, r6, r7}
+  24:	bc01      	pop	{r0}
+  26:	4700      	bx	r0
+  28:	001a      	movs	r2, r3
+  2a:	32f9      	adds	r2, #249	@ 0xf9
+  2c:	32ff      	adds	r2, #255	@ 0xff
+  2e:	9202      	str	r2, [sp, #8]
+  30:	1afe      	subs	r6, r7, r3
+  32:	4297      	cmp	r7, r2
+  34:	d301      	bcc.n	3a <ath6k_bmi_lz_upload+0x3a>
+  36:	26fc      	movs	r6, #252	@ 0xfc
+  38:	0076      	lsls	r6, r6, #1
+  3a:	2403      	movs	r4, #3
+  3c:	9a03      	ldr	r2, [sp, #12]
+  3e:	2100      	movs	r1, #0
+  40:	18d3      	adds	r3, r2, r3
+  42:	200e      	movs	r0, #14
+  44:	4034      	ands	r4, r6
+  46:	9301      	str	r3, [sp, #4]
+  48:	f7ff fffe 	bl	0 <ath6k_bmi_lz_upload>
+			48: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  4c:	2100      	movs	r1, #0
+  4e:	1930      	adds	r0, r6, r4
+  50:	f7ff fffe 	bl	0 <ath6k_bmi_lz_upload>
+			50: R_ARM_THM_CALL	wifi_card_write_mbox0_u32
+  54:	0035      	movs	r5, r6
+  56:	237f      	movs	r3, #127	@ 0x7f
+  58:	439d      	bics	r5, r3
+  5a:	0029      	movs	r1, r5
+  5c:	9801      	ldr	r0, [sp, #4]
+  5e:	f7ff fffe 	bl	0 <ath6k_bmi_lz_upload>
+			5e: R_ARM_THM_CALL	wifi_card_mbox0_sendbytes
+  62:	2c00      	cmp	r4, #0
+  64:	d001      	beq.n	6a <ath6k_bmi_lz_upload+0x6a>
+  66:	2304      	movs	r3, #4
+  68:	1b1c      	subs	r4, r3, r4
+  6a:	1934      	adds	r4, r6, r4
+  6c:	42ac      	cmp	r4, r5
+  6e:	d801      	bhi.n	74 <ath6k_bmi_lz_upload+0x74>
+  70:	9b02      	ldr	r3, [sp, #8]
+  72:	e7d3      	b.n	1c <ath6k_bmi_lz_upload+0x1c>
+  74:	2100      	movs	r1, #0
+  76:	42ae      	cmp	r6, r5
+  78:	d901      	bls.n	7e <ath6k_bmi_lz_upload+0x7e>
+  7a:	9b01      	ldr	r3, [sp, #4]
+  7c:	5d59      	ldrb	r1, [r3, r5]
+  7e:	1e63      	subs	r3, r4, #1
+  80:	1aeb      	subs	r3, r5, r3
+  82:	425a      	negs	r2, r3
+  84:	4153      	adcs	r3, r2
+  86:	20ff      	movs	r0, #255	@ 0xff
+  88:	425b      	negs	r3, r3
+  8a:	4018      	ands	r0, r3
+  8c:	f7ff fffe 	bl	0 <ath6k_bmi_lz_upload>
+			8c: R_ARM_THM_CALL	wifi_card_write_func1_u8
+  90:	3501      	adds	r5, #1
+  92:	e7eb      	b.n	6c <ath6k_bmi_lz_upload+0x6c>
+
+Disassembly of section .text.wifi_card_read_func1_block.isra.0:
+
+00000000 <wifi_card_read_func1_block.isra.0>:
+   0:	b570      	push	{r4, r5, r6, lr}
+   2:	0015      	movs	r5, r2
+   4:	000e      	movs	r6, r1
+   6:	0244      	lsls	r4, r0, #9
+   8:	f7ff fffe 	bl	0 <wifi_ndma_wait>
+			8: R_ARM_THM_CALL	wifi_ndma_wait
+   c:	f7ff fffe 	bl	0 <wifi_sdio_stop>
+			c: R_ARM_THM_CALL	wifi_sdio_stop
+  10:	4b0b      	ldr	r3, [pc, #44]	@ (40 <wifi_card_read_func1_block.isra.0+0x40>)
+  12:	0028      	movs	r0, r5
+  14:	60de      	str	r6, [r3, #12]
+  16:	611d      	str	r5, [r3, #16]
+  18:	8e19      	ldrh	r1, [r3, #48]	@ 0x30
+  1a:	f7ff fffe 	bl	0 <__aeabi_uidiv>
+			1a: R_ARM_THM_CALL	__aeabi_uidiv
+  1e:	21e0      	movs	r1, #224	@ 0xe0
+  20:	0600      	lsls	r0, r0, #24
+  22:	0e00      	lsrs	r0, r0, #24
+  24:	4320      	orrs	r0, r4
+  26:	0549      	lsls	r1, r1, #21
+  28:	4301      	orrs	r1, r0
+  2a:	4806      	ldr	r0, [pc, #24]	@ (44 <wifi_card_read_func1_block.isra.0+0x44>)
+  2c:	f7ff fffe 	bl	0 <wifi_card_read_func1_block.isra.0>
+			2c: R_ARM_THM_CALL	wifi_card_send_command_alt
+  30:	f7ff fffe 	bl	0 <wifi_sdio_stop>
+			30: R_ARM_THM_CALL	wifi_sdio_stop
+  34:	f7ff fffe 	bl	0 <wifi_ndma_wait>
+			34: R_ARM_THM_CALL	wifi_ndma_wait
+  38:	bc70      	pop	{r4, r5, r6}
+  3a:	bc01      	pop	{r0}
+  3c:	4700      	bx	r0
+  3e:	46c0      	nop			@ (mov r8, r8)
+  40:	00000000 	.word	0x00000000
+			40: R_ARM_ABS32	.bss.wlan_ctx
+  44:	00007c35 	.word	0x00007c35
+
+Disassembly of section .text.wifi_card_mbox0_readpkt:
+
+00000000 <wifi_card_mbox0_readpkt>:
+   0:	b5f7      	push	{r0, r1, r2, r4, r5, r6, r7, lr}
+   2:	2464      	movs	r4, #100	@ 0x64
+   4:	2501      	movs	r5, #1
+   6:	2080      	movs	r0, #128	@ 0x80
+   8:	00c0      	lsls	r0, r0, #3
+   a:	f7ff fffe 	bl	0 <wifi_card_mbox0_readpkt>
+			a: R_ARM_THM_CALL	wifi_card_read_func1_u8
+   e:	4228      	tst	r0, r5
+  10:	d000      	beq.n	14 <wifi_card_mbox0_readpkt+0x14>
+  12:	e092      	b.n	13a <wifi_card_mbox0_readpkt+0x13a>
+  14:	3c01      	subs	r4, #1
+  16:	2c00      	cmp	r4, #0
+  18:	d1f5      	bne.n	6 <wifi_card_mbox0_readpkt+0x6>
+  1a:	2500      	movs	r5, #0
+  1c:	0028      	movs	r0, r5
+  1e:	bcfe      	pop	{r1, r2, r3, r4, r5, r6, r7}
+  20:	bc02      	pop	{r1}
+  22:	4708      	bx	r1
+  24:	4b4a      	ldr	r3, [pc, #296]	@ (150 <wifi_card_mbox0_readpkt+0x150>)
+  26:	6818      	ldr	r0, [r3, #0]
+  28:	2300      	movs	r3, #0
+  2a:	9a01      	ldr	r2, [sp, #4]
+  2c:	7013      	strb	r3, [r2, #0]
+  2e:	2380      	movs	r3, #128	@ 0x80
+  30:	0c05      	lsrs	r5, r0, #16
+  32:	019b      	lsls	r3, r3, #6
+  34:	429d      	cmp	r5, r3
+  36:	d90e      	bls.n	56 <wifi_card_mbox0_readpkt+0x56>
+  38:	2404      	movs	r4, #4
+  3a:	2501      	movs	r5, #1
+  3c:	2080      	movs	r0, #128	@ 0x80
+  3e:	00c0      	lsls	r0, r0, #3
+  40:	f7ff fffe 	bl	0 <wifi_card_mbox0_readpkt>
+			40: R_ARM_THM_CALL	wifi_card_read_func1_u8
+  44:	4228      	tst	r0, r5
+  46:	d0e8      	beq.n	1a <wifi_card_mbox0_readpkt+0x1a>
+  48:	20ff      	movs	r0, #255	@ 0xff
+  4a:	3c01      	subs	r4, #1
+  4c:	f7ff fffe 	bl	0 <wifi_card_mbox0_readpkt>
+			4c: R_ARM_THM_CALL	wifi_card_read_func1_u8
+  50:	2c00      	cmp	r4, #0
+  52:	d1f3      	bne.n	3c <wifi_card_mbox0_readpkt+0x3c>
+  54:	e7e1      	b.n	1a <wifi_card_mbox0_readpkt+0x1a>
+  56:	002a      	movs	r2, r5
+  58:	237f      	movs	r3, #127	@ 0x7f
+  5a:	0606      	lsls	r6, r0, #24
+  5c:	0a00      	lsrs	r0, r0, #8
+  5e:	0604      	lsls	r4, r0, #24
+  60:	2080      	movs	r0, #128	@ 0x80
+  62:	3285      	adds	r2, #133	@ 0x85
+  64:	439a      	bics	r2, r3
+  66:	0412      	lsls	r2, r2, #16
+  68:	0c12      	lsrs	r2, r2, #16
+  6a:	01c0      	lsls	r0, r0, #7
+  6c:	1a80      	subs	r0, r0, r2
+  6e:	4f39      	ldr	r7, [pc, #228]	@ (154 <wifi_card_mbox0_readpkt+0x154>)
+  70:	0400      	lsls	r0, r0, #16
+  72:	0039      	movs	r1, r7
+  74:	1400      	asrs	r0, r0, #16
+  76:	0e24      	lsrs	r4, r4, #24
+  78:	0e36      	lsrs	r6, r6, #24
+  7a:	f7ff fffe 	bl	0 <wifi_card_mbox0_readpkt>
+			7a: R_ARM_THM_CALL	wifi_card_read_func1_block.isra.0
+  7e:	f7ff fffe 	bl	0 <wifi_ndma_wait>
+			7e: R_ARM_THM_CALL	wifi_ndma_wait
+  82:	2c00      	cmp	r4, #0
+  84:	d000      	beq.n	88 <wifi_card_mbox0_readpkt+0x88>
+  86:	793c      	ldrb	r4, [r7, #4]
+  88:	1b29      	subs	r1, r5, r4
+  8a:	0409      	lsls	r1, r1, #16
+  8c:	0c09      	lsrs	r1, r1, #16
+  8e:	1d8b      	adds	r3, r1, #6
+  90:	18fb      	adds	r3, r7, r3
+  92:	88f8      	ldrh	r0, [r7, #6]
+  94:	9300      	str	r3, [sp, #0]
+  96:	2e00      	cmp	r6, #0
+  98:	d135      	bne.n	106 <wifi_card_mbox0_readpkt+0x106>
+  9a:	1e8a      	subs	r2, r1, #2
+  9c:	0023      	movs	r3, r4
+  9e:	492e      	ldr	r1, [pc, #184]	@ (158 <wifi_card_mbox0_readpkt+0x158>)
+  a0:	f7ff fffe 	bl	0 <htc_handle_pkt>
+			a0: R_ARM_THM_CALL	htc_handle_pkt
+  a4:	2300      	movs	r3, #0
+  a6:	9a01      	ldr	r2, [sp, #4]
+  a8:	7013      	strb	r3, [r2, #0]
+  aa:	429c      	cmp	r4, r3
+  ac:	d9b6      	bls.n	1c <wifi_card_mbox0_readpkt+0x1c>
+  ae:	9800      	ldr	r0, [sp, #0]
+  b0:	1c59      	adds	r1, r3, #1
+  b2:	1c9a      	adds	r2, r3, #2
+  b4:	0409      	lsls	r1, r1, #16
+  b6:	5cc3      	ldrb	r3, [r0, r3]
+  b8:	0412      	lsls	r2, r2, #16
+  ba:	1409      	asrs	r1, r1, #16
+  bc:	5c41      	ldrb	r1, [r0, r1]
+  be:	0c12      	lsrs	r2, r2, #16
+  c0:	2b02      	cmp	r3, #2
+  c2:	d11c      	bne.n	fe <wifi_card_mbox0_readpkt+0xfe>
+  c4:	2906      	cmp	r1, #6
+  c6:	d11a      	bne.n	fe <wifi_card_mbox0_readpkt+0xfe>
+  c8:	4824      	ldr	r0, [pc, #144]	@ (15c <wifi_card_mbox0_readpkt+0x15c>)
+  ca:	7803      	ldrb	r3, [r0, #0]
+  cc:	2b00      	cmp	r3, #0
+  ce:	d116      	bne.n	fe <wifi_card_mbox0_readpkt+0xfe>
+  d0:	9b00      	ldr	r3, [sp, #0]
+  d2:	5c9b      	ldrb	r3, [r3, r2]
+  d4:	2baa      	cmp	r3, #170	@ 0xaa
+  d6:	d112      	bne.n	fe <wifi_card_mbox0_readpkt+0xfe>
+  d8:	9b00      	ldr	r3, [sp, #0]
+  da:	189b      	adds	r3, r3, r2
+  dc:	795e      	ldrb	r6, [r3, #5]
+  de:	2e55      	cmp	r6, #85	@ 0x55
+  e0:	d10d      	bne.n	fe <wifi_card_mbox0_readpkt+0xfe>
+  e2:	789f      	ldrb	r7, [r3, #2]
+  e4:	3e54      	subs	r6, #84	@ 0x54
+  e6:	7006      	strb	r6, [r0, #0]
+  e8:	785e      	ldrb	r6, [r3, #1]
+  ea:	023f      	lsls	r7, r7, #8
+  ec:	4337      	orrs	r7, r6
+  ee:	78de      	ldrb	r6, [r3, #3]
+  f0:	791b      	ldrb	r3, [r3, #4]
+  f2:	0436      	lsls	r6, r6, #16
+  f4:	4816      	ldr	r0, [pc, #88]	@ (150 <wifi_card_mbox0_readpkt+0x150>)
+  f6:	433e      	orrs	r6, r7
+  f8:	061b      	lsls	r3, r3, #24
+  fa:	4333      	orrs	r3, r6
+  fc:	6003      	str	r3, [r0, #0]
+  fe:	1889      	adds	r1, r1, r2
+ 100:	040b      	lsls	r3, r1, #16
+ 102:	0c1b      	lsrs	r3, r3, #16
+ 104:	e7d1      	b.n	aa <wifi_card_mbox0_readpkt+0xaa>
+ 106:	2e01      	cmp	r6, #1
+ 108:	d105      	bne.n	116 <wifi_card_mbox0_readpkt+0x116>
+ 10a:	1e8a      	subs	r2, r1, #2
+ 10c:	0023      	movs	r3, r4
+ 10e:	4912      	ldr	r1, [pc, #72]	@ (158 <wifi_card_mbox0_readpkt+0x158>)
+ 110:	f7ff fffe 	bl	0 <wmi_handle_pkt>
+			110: R_ARM_THM_CALL	wmi_handle_pkt
+ 114:	e7c6      	b.n	a4 <wifi_card_mbox0_readpkt+0xa4>
+ 116:	3e02      	subs	r6, #2
+ 118:	2e03      	cmp	r6, #3
+ 11a:	d8c3      	bhi.n	a4 <wifi_card_mbox0_readpkt+0xa4>
+ 11c:	8bba      	ldrh	r2, [r7, #28]
+ 11e:	4b10      	ldr	r3, [pc, #64]	@ (160 <wifi_card_mbox0_readpkt+0x160>)
+ 120:	429a      	cmp	r2, r3
+ 122:	d106      	bne.n	132 <wifi_card_mbox0_readpkt+0x132>
+ 124:	4b0f      	ldr	r3, [pc, #60]	@ (164 <wifi_card_mbox0_readpkt+0x164>)
+ 126:	4810      	ldr	r0, [pc, #64]	@ (168 <wifi_card_mbox0_readpkt+0x168>)
+ 128:	4a0b      	ldr	r2, [pc, #44]	@ (158 <wifi_card_mbox0_readpkt+0x158>)
+ 12a:	3918      	subs	r1, #24
+ 12c:	f7ff fffe 	bl	0 <data_handle_auth>
+			12c: R_ARM_THM_CALL	data_handle_auth
+ 130:	e7b8      	b.n	a4 <wifi_card_mbox0_readpkt+0xa4>
+ 132:	480e      	ldr	r0, [pc, #56]	@ (16c <wifi_card_mbox0_readpkt+0x16c>)
+ 134:	f7ff fffe 	bl	0 <Wifi_TWL_RxAddPacketToQueue>
+			134: R_ARM_THM_CALL	Wifi_TWL_RxAddPacketToQueue
+ 138:	e7b4      	b.n	a4 <wifi_card_mbox0_readpkt+0xa4>
+ 13a:	4b08      	ldr	r3, [pc, #32]	@ (15c <wifi_card_mbox0_readpkt+0x15c>)
+ 13c:	9301      	str	r3, [sp, #4]
+ 13e:	781b      	ldrb	r3, [r3, #0]
+ 140:	2b00      	cmp	r3, #0
+ 142:	d000      	beq.n	146 <wifi_card_mbox0_readpkt+0x146>
+ 144:	e76e      	b.n	24 <wifi_card_mbox0_readpkt+0x24>
+ 146:	2081      	movs	r0, #129	@ 0x81
+ 148:	00c0      	lsls	r0, r0, #3
+ 14a:	f7ff fffe 	bl	0 <wifi_card_mbox0_readpkt>
+			14a: R_ARM_THM_CALL	wifi_card_read_func1_u32
+ 14e:	e76e      	b.n	2e <wifi_card_mbox0_readpkt+0x2e>
+	...
+			150: R_ARM_ABS32	.bss.mbox_lookahead
+			154: R_ARM_ABS32	.bss.mbox_buffer
+ 158:	00000008 	.word	0x00000008
+			158: R_ARM_ABS32	.bss.mbox_buffer
+ 15c:	00000000 	.word	0x00000000
+			15c: R_ARM_ABS32	.bss.mbox_has_lookahead
+ 160:	00008e88 	.word	0x00008e88
+ 164:	0000000e 	.word	0x0000000e
+			164: R_ARM_ABS32	.bss.mbox_buffer
+ 168:	0000001e 	.word	0x0000001e
+			168: R_ARM_ABS32	.bss.mbox_buffer
+ 16c:	00000006 	.word	0x00000006
+			16c: R_ARM_ABS32	.bss.mbox_buffer
+
+Disassembly of section .text.wifi_card_irq:
+
+00000000 <wifi_card_irq>:
+   0:	4b0a      	ldr	r3, [pc, #40]	@ (2c <wifi_card_irq+0x2c>)
+   2:	b510      	push	{r4, lr}
+   4:	8818      	ldrh	r0, [r3, #0]
+   6:	f7ff fffe 	bl	0 <Wifi_RandomAddEntropy>
+			6: R_ARM_THM_CALL	Wifi_RandomAddEntropy
+   a:	2080      	movs	r0, #128	@ 0x80
+   c:	00c0      	lsls	r0, r0, #3
+   e:	f7ff fffe 	bl	0 <wifi_card_irq>
+			e: R_ARM_THM_CALL	wifi_card_read_func1_u32
+  12:	0001      	movs	r1, r0
+  14:	2080      	movs	r0, #128	@ 0x80
+  16:	00c0      	lsls	r0, r0, #3
+  18:	f7ff fffe 	bl	0 <wifi_card_irq>
+			18: R_ARM_THM_CALL	wifi_card_write_func1_u32
+  1c:	f7ff fffe 	bl	0 <wifi_card_irq>
+			1c: R_ARM_THM_CALL	wifi_card_mbox0_readpkt
+  20:	2800      	cmp	r0, #0
+  22:	d1fb      	bne.n	1c <wifi_card_irq+0x1c>
+  24:	bc10      	pop	{r4}
+  26:	bc01      	pop	{r0}
+  28:	4700      	bx	r0
+  2a:	46c0      	nop			@ (mov r8, r8)
+  2c:	04000006 	.word	0x04000006
+
+Disassembly of section .text.wifi_card_mbox0_readbytes:
+
+00000000 <ath6k_mbox0_readbytes>:
+   0:	2380      	movs	r3, #128	@ 0x80
+   2:	b510      	push	{r4, lr}
+   4:	0414      	lsls	r4, r2, #16
+   6:	0c24      	lsrs	r4, r4, #16
+   8:	01db      	lsls	r3, r3, #7
+   a:	1b1b      	subs	r3, r3, r4
+   c:	0001      	movs	r1, r0
+   e:	0418      	lsls	r0, r3, #16
+  10:	0c00      	lsrs	r0, r0, #16
+  12:	f7ff fffe 	bl	0 <ath6k_mbox0_readbytes>
+			12: R_ARM_THM_CALL	wifi_card_read_func1_block.isra.0
+  16:	0020      	movs	r0, r4
+  18:	bc10      	pop	{r4}
+  1a:	bc02      	pop	{r1}
+  1c:	4708      	bx	r1
+
+Disassembly of section .text.wifi_card_deinit:
+
+00000000 <ath6k_deinit_hw>:
+   0:	b510      	push	{r4, lr}
+   2:	2000      	movs	r0, #0
+   4:	f7ff fffe 	bl	0 <wifi_sdio_enable_cardirq>
+			4: R_ARM_THM_CALL	wifi_sdio_enable_cardirq
+   8:	2080      	movs	r0, #128	@ 0x80
+   a:	0100      	lsls	r0, r0, #4
+   c:	f7ff fffe 	bl	0 <irqDisableAUX>
+			c: R_ARM_THM_CALL	irqDisableAUX
+  10:	2002      	movs	r0, #2
+  12:	f7ff fffe 	bl	0 <timerStop>
+			12: R_ARM_THM_CALL	timerStop
+  16:	4c09      	ldr	r4, [pc, #36]	@ (3c <ath6k_deinit_hw+0x3c>)
+  18:	7823      	ldrb	r3, [r4, #0]
+  1a:	2b00      	cmp	r3, #0
+  1c:	d008      	beq.n	30 <ath6k_deinit_hw+0x30>
+  1e:	2083      	movs	r0, #131	@ 0x83
+  20:	2100      	movs	r1, #0
+  22:	00c0      	lsls	r0, r0, #3
+  24:	f7ff fffe 	bl	0 <ath6k_deinit_hw>
+			24: R_ARM_THM_CALL	wifi_card_write_func1_u32
+  28:	2100      	movs	r1, #0
+  2a:	2004      	movs	r0, #4
+  2c:	f7ff fffe 	bl	0 <ath6k_deinit_hw>
+			2c: R_ARM_THM_CALL	wifi_card_write_func0_u8
+  30:	2300      	movs	r3, #0
+  32:	7023      	strb	r3, [r4, #0]
+  34:	bc10      	pop	{r4}
+  36:	bc01      	pop	{r0}
+  38:	4700      	bx	r0
+  3a:	46c0      	nop			@ (mov r8, r8)
+  3c:	00000000 	.word	0x00000000
+			3c: R_ARM_ABS32	.bss.wifi_card_bInitted
+
+Disassembly of section .text.wifi_card_initted:
+
+00000000 <wifi_card_initted>:
+   0:	4b04      	ldr	r3, [pc, #16]	@ (14 <wifi_card_initted+0x14>)
+   2:	7818      	ldrb	r0, [r3, #0]
+   4:	b510      	push	{r4, lr}
+   6:	2800      	cmp	r0, #0
+   8:	d001      	beq.n	e <wifi_card_initted+0xe>
+   a:	f7ff fffe 	bl	0 <wmi_is_ready>
+			a: R_ARM_THM_CALL	wmi_is_ready
+   e:	bc10      	pop	{r4}
+  10:	bc02      	pop	{r1}
+  12:	4708      	bx	r1
+  14:	00000000 	.word	0x00000000
+			14: R_ARM_ABS32	.bss.wifi_card_bInitted
+
+Disassembly of section .text.wifi_card_host_interest_addr:
+
+00000000 <wifi_card_host_interest_addr>:
+   0:	4b01      	ldr	r3, [pc, #4]	@ (8 <wifi_card_host_interest_addr+0x8>)
+   2:	6818      	ldr	r0, [r3, #0]
+   4:	4770      	bx	lr
+   6:	46c0      	nop			@ (mov r8, r8)
+   8:	00000000 	.word	0x00000000
+			8: R_ARM_ABS32	.bss.device_host_interest_addr
+
+Disassembly of section .text.wifi_card_switch_device:
+
+00000000 <wifi_card_switch_device>:
+   0:	b510      	push	{r4, lr}
+   2:	4803      	ldr	r0, [pc, #12]	@ (10 <wifi_card_switch_device+0x10>)
+   4:	f7ff fffe 	bl	0 <wifi_sdio_switch_device>
+			4: R_ARM_THM_CALL	wifi_sdio_switch_device
+   8:	bc10      	pop	{r4}
+   a:	bc01      	pop	{r0}
+   c:	4700      	bx	r0
+   e:	46c0      	nop			@ (mov r8, r8)
+  10:	00000000 	.word	0x00000000
+			10: R_ARM_ABS32	.bss.wlan_ctx
+
+Disassembly of section .text.wifi_card_wlan_init_bmi:
+
+00000000 <wifi_card_wlan_init_bmi>:
+   0:	b5f0      	push	{r4, r5, r6, r7, lr}
+   2:	4c9d      	ldr	r4, [pc, #628]	@ (278 <wifi_card_wlan_init_bmi+0x278>)
+   4:	0023      	movs	r3, r4
+   6:	2700      	movs	r7, #0
+   8:	3332      	adds	r3, #50	@ 0x32
+   a:	b085      	sub	sp, #20
+   c:	701f      	strb	r7, [r3, #0]
+   e:	2380      	movs	r3, #128	@ 0x80
+  10:	0038      	movs	r0, r7
+  12:	6027      	str	r7, [r4, #0]
+  14:	8623      	strh	r3, [r4, #48]	@ 0x30
+  16:	f7ff fffe 	bl	0 <gpioSetWifiMode>
+			16: R_ARM_THM_CALL	gpioSetWifiMode
+  1a:	4898      	ldr	r0, [pc, #608]	@ (27c <wifi_card_wlan_init_bmi+0x27c>)
+  1c:	df03      	svc	3
+  1e:	4b98      	ldr	r3, [pc, #608]	@ (280 <wifi_card_wlan_init_bmi+0x280>)
+  20:	aa02      	add	r2, sp, #8
+  22:	8093      	strh	r3, [r2, #4]
+  24:	2102      	movs	r1, #2
+  26:	003b      	movs	r3, r7
+  28:	003a      	movs	r2, r7
+  2a:	a803      	add	r0, sp, #12
+  2c:	f7ff fffe 	bl	0 <rtcTransaction>
+			2c: R_ARM_THM_CALL	rtcTransaction
+  30:	2374      	movs	r3, #116	@ 0x74
+  32:	aa02      	add	r2, sp, #8
+  34:	8093      	strh	r3, [r2, #4]
+  36:	2102      	movs	r1, #2
+  38:	003b      	movs	r3, r7
+  3a:	003a      	movs	r2, r7
+  3c:	a803      	add	r0, sp, #12
+  3e:	f7ff fffe 	bl	0 <rtcTransaction>
+			3e: R_ARM_THM_CALL	rtcTransaction
+  42:	2340      	movs	r3, #64	@ 0x40
+  44:	4e8f      	ldr	r6, [pc, #572]	@ (284 <wifi_card_wlan_init_bmi+0x284>)
+  46:	4d90      	ldr	r5, [pc, #576]	@ (288 <wifi_card_wlan_init_bmi+0x288>)
+  48:	6033      	str	r3, [r6, #0]
+  4a:	4b90      	ldr	r3, [pc, #576]	@ (28c <wifi_card_wlan_init_bmi+0x28c>)
+  4c:	2213      	movs	r2, #19
+  4e:	2130      	movs	r1, #48	@ 0x30
+  50:	602b      	str	r3, [r5, #0]
+  52:	204a      	movs	r0, #74	@ 0x4a
+  54:	f7ff fffe 	bl	0 <i2cWriteRegister>
+			54: R_ARM_THM_CALL	i2cWriteRegister
+  58:	2341      	movs	r3, #65	@ 0x41
+  5a:	2201      	movs	r2, #1
+  5c:	2104      	movs	r1, #4
+  5e:	6033      	str	r3, [r6, #0]
+  60:	4b8b      	ldr	r3, [pc, #556]	@ (290 <wifi_card_wlan_init_bmi+0x290>)
+  62:	602f      	str	r7, [r5, #0]
+  64:	801a      	strh	r2, [r3, #0]
+  66:	7221      	strb	r1, [r4, #8]
+  68:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			68: R_ARM_THM_CALL	wifi_card_switch_device
+  6c:	20f0      	movs	r0, #240	@ 0xf0
+  6e:	0200      	lsls	r0, r0, #8
+  70:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			70: R_ARM_THM_CALL	ioDelay
+  74:	0038      	movs	r0, r7
+  76:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			76: R_ARM_THM_CALL	wifi_card_read_func0_u8
+  7a:	2204      	movs	r2, #4
+  7c:	6a63      	ldr	r3, [r4, #36]	@ 0x24
+  7e:	4213      	tst	r3, r2
+  80:	d003      	beq.n	8a <wifi_card_wlan_init_bmi+0x8a>
+  82:	2301      	movs	r3, #1
+  84:	7223      	strb	r3, [r4, #8]
+  86:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			86: R_ARM_THM_CALL	wifi_card_switch_device
+  8a:	f7ff fffe 	bl	0 <wifi_sdio_stop>
+			8a: R_ARM_THM_CALL	wifi_sdio_stop
+  8e:	2300      	movs	r3, #0
+  90:	9301      	str	r3, [sp, #4]
+  92:	2342      	movs	r3, #66	@ 0x42
+  94:	6033      	str	r3, [r6, #0]
+  96:	9b01      	ldr	r3, [sp, #4]
+  98:	9901      	ldr	r1, [sp, #4]
+  9a:	602b      	str	r3, [r5, #0]
+  9c:	487d      	ldr	r0, [pc, #500]	@ (294 <wifi_card_wlan_init_bmi+0x294>)
+  9e:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			9e: R_ARM_THM_CALL	wifi_card_send_command
+  a2:	2243      	movs	r2, #67	@ 0x43
+  a4:	6963      	ldr	r3, [r4, #20]
+  a6:	6032      	str	r2, [r6, #0]
+  a8:	602b      	str	r3, [r5, #0]
+  aa:	6a62      	ldr	r2, [r4, #36]	@ 0x24
+  ac:	2704      	movs	r7, #4
+  ae:	0011      	movs	r1, r2
+  b0:	4039      	ands	r1, r7
+  b2:	423a      	tst	r2, r7
+  b4:	d01a      	beq.n	ec <wifi_card_wlan_init_bmi+0xec>
+  b6:	2100      	movs	r1, #0
+  b8:	2002      	movs	r0, #2
+  ba:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			ba: R_ARM_THM_CALL	wifi_card_write_func0_u8
+  be:	2102      	movs	r1, #2
+  c0:	0008      	movs	r0, r1
+  c2:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			c2: R_ARM_THM_CALL	wifi_card_write_func0_u8
+  c6:	20f0      	movs	r0, #240	@ 0xf0
+  c8:	0200      	lsls	r0, r0, #8
+  ca:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			ca: R_ARM_THM_CALL	ioDelay
+  ce:	21e0      	movs	r1, #224	@ 0xe0
+  d0:	2704      	movs	r7, #4
+  d2:	4871      	ldr	r0, [pc, #452]	@ (298 <wifi_card_wlan_init_bmi+0x298>)
+  d4:	0109      	lsls	r1, r1, #4
+  d6:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			d6: R_ARM_THM_CALL	wifi_card_send_command
+  da:	6a63      	ldr	r3, [r4, #36]	@ 0x24
+  dc:	423b      	tst	r3, r7
+  de:	d01d      	beq.n	11c <wifi_card_wlan_init_bmi+0x11c>
+  e0:	2001      	movs	r0, #1
+  e2:	4240      	negs	r0, r0
+  e4:	b005      	add	sp, #20
+  e6:	bcf0      	pop	{r4, r5, r6, r7}
+  e8:	bc02      	pop	{r1}
+  ea:	4708      	bx	r1
+  ec:	07d2      	lsls	r2, r2, #31
+  ee:	d5d0      	bpl.n	92 <wifi_card_wlan_init_bmi+0x92>
+  f0:	2b00      	cmp	r3, #0
+  f2:	db02      	blt.n	fa <wifi_card_wlan_init_bmi+0xfa>
+  f4:	021b      	lsls	r3, r3, #8
+  f6:	0a1b      	lsrs	r3, r3, #8
+  f8:	e7ca      	b.n	90 <wifi_card_wlan_init_bmi+0x90>
+  fa:	4868      	ldr	r0, [pc, #416]	@ (29c <wifi_card_wlan_init_bmi+0x29c>)
+  fc:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			fc: R_ARM_THM_CALL	wifi_card_send_command
+ 100:	6a63      	ldr	r3, [r4, #36]	@ 0x24
+ 102:	423b      	tst	r3, r7
+ 104:	d1ec      	bne.n	e0 <wifi_card_wlan_init_bmi+0xe0>
+ 106:	6961      	ldr	r1, [r4, #20]
+ 108:	0c09      	lsrs	r1, r1, #16
+ 10a:	8021      	strh	r1, [r4, #0]
+ 10c:	4864      	ldr	r0, [pc, #400]	@ (2a0 <wifi_card_wlan_init_bmi+0x2a0>)
+ 10e:	0409      	lsls	r1, r1, #16
+ 110:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			110: R_ARM_THM_CALL	wifi_card_send_command
+ 114:	6a63      	ldr	r3, [r4, #36]	@ 0x24
+ 116:	423b      	tst	r3, r7
+ 118:	d0cd      	beq.n	b6 <wifi_card_wlan_init_bmi+0xb6>
+ 11a:	e7e1      	b.n	e0 <wifi_card_wlan_init_bmi+0xe0>
+ 11c:	237e      	movs	r3, #126	@ 0x7e
+ 11e:	7d21      	ldrb	r1, [r4, #20]
+ 120:	425b      	negs	r3, r3
+ 122:	4319      	orrs	r1, r3
+ 124:	0609      	lsls	r1, r1, #24
+ 126:	2007      	movs	r0, #7
+ 128:	0e09      	lsrs	r1, r1, #24
+ 12a:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			12a: R_ARM_THM_CALL	wifi_card_write_func0_u8
+ 12e:	6a63      	ldr	r3, [r4, #36]	@ 0x24
+ 130:	423b      	tst	r3, r7
+ 132:	d1d5      	bne.n	e0 <wifi_card_wlan_init_bmi+0xe0>
+ 134:	7227      	strb	r7, [r4, #8]
+ 136:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			136: R_ARM_THM_CALL	wifi_card_switch_device
+ 13a:	2102      	movs	r1, #2
+ 13c:	2012      	movs	r0, #18
+ 13e:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			13e: R_ARM_THM_CALL	wifi_card_write_func0_u8
+ 142:	6a63      	ldr	r3, [r4, #36]	@ 0x24
+ 144:	423b      	tst	r3, r7
+ 146:	d1cb      	bne.n	e0 <wifi_card_wlan_init_bmi+0xe0>
+ 148:	2088      	movs	r0, #136	@ 0x88
+ 14a:	8e21      	ldrh	r1, [r4, #48]	@ 0x30
+ 14c:	0609      	lsls	r1, r1, #24
+ 14e:	0e09      	lsrs	r1, r1, #24
+ 150:	0040      	lsls	r0, r0, #1
+ 152:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			152: R_ARM_THM_CALL	wifi_card_write_func0_u8
+ 156:	6a63      	ldr	r3, [r4, #36]	@ 0x24
+ 158:	423b      	tst	r3, r7
+ 15a:	d1c1      	bne.n	e0 <wifi_card_wlan_init_bmi+0xe0>
+ 15c:	2012      	movs	r0, #18
+ 15e:	8e21      	ldrh	r1, [r4, #48]	@ 0x30
+ 160:	30ff      	adds	r0, #255	@ 0xff
+ 162:	0a09      	lsrs	r1, r1, #8
+ 164:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			164: R_ARM_THM_CALL	wifi_card_write_func0_u8
+ 168:	6a63      	ldr	r3, [r4, #36]	@ 0x24
+ 16a:	423b      	tst	r3, r7
+ 16c:	d1b8      	bne.n	e0 <wifi_card_wlan_init_bmi+0xe0>
+ 16e:	8e21      	ldrh	r1, [r4, #48]	@ 0x30
+ 170:	0609      	lsls	r1, r1, #24
+ 172:	2010      	movs	r0, #16
+ 174:	0e09      	lsrs	r1, r1, #24
+ 176:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			176: R_ARM_THM_CALL	wifi_card_write_func0_u8
+ 17a:	6a63      	ldr	r3, [r4, #36]	@ 0x24
+ 17c:	423b      	tst	r3, r7
+ 17e:	d1af      	bne.n	e0 <wifi_card_wlan_init_bmi+0xe0>
+ 180:	8e21      	ldrh	r1, [r4, #48]	@ 0x30
+ 182:	2011      	movs	r0, #17
+ 184:	0a09      	lsrs	r1, r1, #8
+ 186:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			186: R_ARM_THM_CALL	wifi_card_write_func0_u8
+ 18a:	6a63      	ldr	r3, [r4, #36]	@ 0x24
+ 18c:	001a      	movs	r2, r3
+ 18e:	403a      	ands	r2, r7
+ 190:	9201      	str	r2, [sp, #4]
+ 192:	423b      	tst	r3, r7
+ 194:	d1a4      	bne.n	e0 <wifi_card_wlan_init_bmi+0xe0>
+ 196:	20f0      	movs	r0, #240	@ 0xf0
+ 198:	0200      	lsls	r0, r0, #8
+ 19a:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			19a: R_ARM_THM_CALL	ioDelay
+ 19e:	9801      	ldr	r0, [sp, #4]
+ 1a0:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			1a0: R_ARM_THM_CALL	wifi_card_read_func0_u8
+ 1a4:	6a63      	ldr	r3, [r4, #36]	@ 0x24
+ 1a6:	423b      	tst	r3, r7
+ 1a8:	d19a      	bne.n	e0 <wifi_card_wlan_init_bmi+0xe0>
+ 1aa:	2102      	movs	r1, #2
+ 1ac:	0008      	movs	r0, r1
+ 1ae:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			1ae: R_ARM_THM_CALL	wifi_card_write_func0_u8
+ 1b2:	2444      	movs	r4, #68	@ 0x44
+ 1b4:	2703      	movs	r7, #3
+ 1b6:	6034      	str	r4, [r6, #0]
+ 1b8:	2003      	movs	r0, #3
+ 1ba:	602f      	str	r7, [r5, #0]
+ 1bc:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			1bc: R_ARM_THM_CALL	wifi_card_read_func0_u8
+ 1c0:	9001      	str	r0, [sp, #4]
+ 1c2:	2802      	cmp	r0, #2
+ 1c4:	d1f7      	bne.n	1b6 <wifi_card_wlan_init_bmi+0x1b6>
+ 1c6:	4837      	ldr	r0, [pc, #220]	@ (2a4 <wifi_card_wlan_init_bmi+0x2a4>)
+ 1c8:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			1c8: R_ARM_THM_CALL	wifi_card_read_func0_u8
+ 1cc:	4836      	ldr	r0, [pc, #216]	@ (2a8 <wifi_card_wlan_init_bmi+0x2a8>)
+ 1ce:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			1ce: R_ARM_THM_CALL	wifi_card_read_func0_u8
+ 1d2:	4836      	ldr	r0, [pc, #216]	@ (2ac <wifi_card_wlan_init_bmi+0x2ac>)
+ 1d4:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			1d4: R_ARM_THM_CALL	wifi_card_read_func0_u8
+ 1d8:	4835      	ldr	r0, [pc, #212]	@ (2b0 <wifi_card_wlan_init_bmi+0x2b0>)
+ 1da:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			1da: R_ARM_THM_CALL	wifi_card_read_func0_u8
+ 1de:	4835      	ldr	r0, [pc, #212]	@ (2b4 <wifi_card_wlan_init_bmi+0x2b4>)
+ 1e0:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			1e0: R_ARM_THM_CALL	wifi_card_read_intern_word
+ 1e4:	4b34      	ldr	r3, [pc, #208]	@ (2b8 <wifi_card_wlan_init_bmi+0x2b8>)
+ 1e6:	18c3      	adds	r3, r0, r3
+ 1e8:	425a      	negs	r2, r3
+ 1ea:	4153      	adcs	r3, r2
+ 1ec:	4a33      	ldr	r2, [pc, #204]	@ (2bc <wifi_card_wlan_init_bmi+0x2bc>)
+ 1ee:	425b      	negs	r3, r3
+ 1f0:	4013      	ands	r3, r2
+ 1f2:	22a4      	movs	r2, #164	@ 0xa4
+ 1f4:	4c32      	ldr	r4, [pc, #200]	@ (2c0 <wifi_card_wlan_init_bmi+0x2c0>)
+ 1f6:	03d2      	lsls	r2, r2, #15
+ 1f8:	189b      	adds	r3, r3, r2
+ 1fa:	4f32      	ldr	r7, [pc, #200]	@ (2c4 <wifi_card_wlan_init_bmi+0x2c4>)
+ 1fc:	6023      	str	r3, [r4, #0]
+ 1fe:	3358      	adds	r3, #88	@ 0x58
+ 200:	6038      	str	r0, [r7, #0]
+ 202:	0018      	movs	r0, r3
+ 204:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			204: R_ARM_THM_CALL	wifi_card_read_intern_word
+ 208:	2180      	movs	r1, #128	@ 0x80
+ 20a:	2080      	movs	r0, #128	@ 0x80
+ 20c:	0049      	lsls	r1, r1, #1
+ 20e:	01c0      	lsls	r0, r0, #7
+ 210:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			210: R_ARM_THM_CALL	wifi_card_write_intern_word
+ 214:	2080      	movs	r0, #128	@ 0x80
+ 216:	0240      	lsls	r0, r0, #9
+ 218:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			218: R_ARM_THM_CALL	ioDelay
+ 21c:	482a      	ldr	r0, [pc, #168]	@ (2c8 <wifi_card_wlan_init_bmi+0x2c8>)
+ 21e:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			21e: R_ARM_THM_CALL	wifi_card_read_intern_word
+ 222:	2245      	movs	r2, #69	@ 0x45
+ 224:	683b      	ldr	r3, [r7, #0]
+ 226:	6032      	str	r2, [r6, #0]
+ 228:	602b      	str	r3, [r5, #0]
+ 22a:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			22a: R_ARM_THM_CALL	wifi_card_bmi_get_version
+ 22e:	2346      	movs	r3, #70	@ 0x46
+ 230:	6033      	str	r3, [r6, #0]
+ 232:	6028      	str	r0, [r5, #0]
+ 234:	3001      	adds	r0, #1
+ 236:	d100      	bne.n	23a <wifi_card_wlan_init_bmi+0x23a>
+ 238:	e752      	b.n	e0 <wifi_card_wlan_init_bmi+0xe0>
+ 23a:	9901      	ldr	r1, [sp, #4]
+ 23c:	6820      	ldr	r0, [r4, #0]
+ 23e:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			23e: R_ARM_THM_CALL	wifi_card_write_intern_word
+ 242:	4822      	ldr	r0, [pc, #136]	@ (2cc <wifi_card_wlan_init_bmi+0x2cc>)
+ 244:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			244: R_ARM_THM_CALL	wifi_card_bmi_read_register
+ 248:	2108      	movs	r1, #8
+ 24a:	4301      	orrs	r1, r0
+ 24c:	481f      	ldr	r0, [pc, #124]	@ (2cc <wifi_card_wlan_init_bmi+0x2cc>)
+ 24e:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			24e: R_ARM_THM_CALL	wifi_card_bmi_write_register
+ 252:	481f      	ldr	r0, [pc, #124]	@ (2d0 <wifi_card_wlan_init_bmi+0x2d0>)
+ 254:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			254: R_ARM_THM_CALL	wifi_card_bmi_read_register
+ 258:	2101      	movs	r1, #1
+ 25a:	4301      	orrs	r1, r0
+ 25c:	481c      	ldr	r0, [pc, #112]	@ (2d0 <wifi_card_wlan_init_bmi+0x2d0>)
+ 25e:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			25e: R_ARM_THM_CALL	wifi_card_bmi_write_register
+ 262:	2105      	movs	r1, #5
+ 264:	481b      	ldr	r0, [pc, #108]	@ (2d4 <wifi_card_wlan_init_bmi+0x2d4>)
+ 266:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			266: R_ARM_THM_CALL	wifi_card_bmi_write_register
+ 26a:	481b      	ldr	r0, [pc, #108]	@ (2d8 <wifi_card_wlan_init_bmi+0x2d8>)
+ 26c:	2100      	movs	r1, #0
+ 26e:	f7ff fffe 	bl	0 <wifi_card_wlan_init_bmi>
+			26e: R_ARM_THM_CALL	wifi_card_bmi_write_register
+ 272:	2000      	movs	r0, #0
+ 274:	e736      	b.n	e4 <wifi_card_wlan_init_bmi+0xe4>
+ 276:	46c0      	nop			@ (mov r8, r8)
+ 278:	00000000 	.word	0x00000000
+			278: R_ARM_ABS32	.bss.wlan_ctx
+ 27c:	000a3a48 	.word	0x000a3a48
+ 280:	ffff8072 	.word	0xffff8072
+ 284:	0237f04c 	.word	0x0237f04c
+ 288:	0237f03c 	.word	0x0237f03c
+ 28c:	00003013 	.word	0x00003013
+ 290:	04004020 	.word	0x04004020
+ 294:	00000705 	.word	0x00000705
+ 298:	00000434 	.word	0x00000434
+ 29c:	00000403 	.word	0x00000403
+ 2a0:	00000507 	.word	0x00000507
+ 2a4:	00001007 	.word	0x00001007
+ 2a8:	00001008 	.word	0x00001008
+ 2ac:	00001009 	.word	0x00001009
+ 2b0:	0000100a 	.word	0x0000100a
+ 2b4:	000040ec 	.word	0x000040ec
+ 2b8:	fdffffff 	.word	0xfdffffff
+ 2bc:	fffe0400 	.word	0xfffe0400
+	...
+			2c0: R_ARM_ABS32	.bss.device_host_interest_addr
+			2c4: R_ARM_ABS32	.bss.device_chip_id
+ 2c8:	000040c0 	.word	0x000040c0
+ 2cc:	000180c0 	.word	0x000180c0
+ 2d0:	000040c4 	.word	0x000040c4
+ 2d4:	00004028 	.word	0x00004028
+ 2d8:	00004020 	.word	0x00004020
+
+Disassembly of section .text.wifi_card_device_init:
+
+00000000 <wifi_card_device_init>:
+   0:	2333      	movs	r3, #51	@ 0x33
+   2:	b5f7      	push	{r0, r1, r2, r4, r5, r6, r7, lr}
+   4:	4c36      	ldr	r4, [pc, #216]	@ (e0 <wifi_card_device_init+0xe0>)
+   6:	4a37      	ldr	r2, [pc, #220]	@ (e4 <wifi_card_device_init+0xe4>)
+   8:	2100      	movs	r1, #0
+   a:	6013      	str	r3, [r2, #0]
+   c:	0020      	movs	r0, r4
+   e:	2238      	movs	r2, #56	@ 0x38
+  10:	f7ff fffe 	bl	0 <memset>
+			10: R_ARM_THM_CALL	memset
+  14:	2301      	movs	r3, #1
+  16:	7223      	strb	r3, [r4, #8]
+  18:	f7ff fffe 	bl	0 <wifi_card_device_init>
+			18: R_ARM_THM_CALL	wifi_card_wlan_init_bmi
+  1c:	4e32      	ldr	r6, [pc, #200]	@ (e8 <wifi_card_device_init+0xe8>)
+  1e:	1e04      	subs	r4, r0, #0
+  20:	4d32      	ldr	r5, [pc, #200]	@ (ec <wifi_card_device_init+0xec>)
+  22:	d15a      	bne.n	da <wifi_card_device_init+0xda>
+  24:	4f32      	ldr	r7, [pc, #200]	@ (f0 <wifi_card_device_init+0xf0>)
+  26:	6838      	ldr	r0, [r7, #0]
+  28:	2180      	movs	r1, #128	@ 0x80
+  2a:	306c      	adds	r0, #108	@ 0x6c
+  2c:	f7ff fffe 	bl	0 <wifi_card_device_init>
+			2c: R_ARM_THM_CALL	wifi_card_write_intern_word
+  30:	6838      	ldr	r0, [r7, #0]
+  32:	2163      	movs	r1, #99	@ 0x63
+  34:	3074      	adds	r0, #116	@ 0x74
+  36:	f7ff fffe 	bl	0 <wifi_card_device_init>
+			36: R_ARM_THM_CALL	wifi_card_write_intern_word
+  3a:	2247      	movs	r2, #71	@ 0x47
+  3c:	683b      	ldr	r3, [r7, #0]
+  3e:	6032      	str	r2, [r6, #0]
+  40:	602b      	str	r3, [r5, #0]
+  42:	f7ff fffe 	bl	0 <wifi_card_device_init>
+			42: R_ARM_THM_CALL	wifi_card_bmi_start_firmware
+  46:	2348      	movs	r3, #72	@ 0x48
+  48:	6033      	str	r3, [r6, #0]
+  4a:	602c      	str	r4, [r5, #0]
+  4c:	2249      	movs	r2, #73	@ 0x49
+  4e:	683b      	ldr	r3, [r7, #0]
+  50:	3358      	adds	r3, #88	@ 0x58
+  52:	6032      	str	r2, [r6, #0]
+  54:	602b      	str	r3, [r5, #0]
+  56:	6838      	ldr	r0, [r7, #0]
+  58:	3058      	adds	r0, #88	@ 0x58
+  5a:	f7ff fffe 	bl	0 <wifi_card_device_init>
+			5a: R_ARM_THM_CALL	wifi_card_read_intern_word
+  5e:	234a      	movs	r3, #74	@ 0x4a
+  60:	9001      	str	r0, [sp, #4]
+  62:	6033      	str	r3, [r6, #0]
+  64:	9b01      	ldr	r3, [sp, #4]
+  66:	602b      	str	r3, [r5, #0]
+  68:	9b01      	ldr	r3, [sp, #4]
+  6a:	2b01      	cmp	r3, #1
+  6c:	d004      	beq.n	78 <wifi_card_device_init+0x78>
+  6e:	2080      	movs	r0, #128	@ 0x80
+  70:	0140      	lsls	r0, r0, #5
+  72:	f7ff fffe 	bl	0 <wifi_card_device_init>
+			72: R_ARM_THM_CALL	ioDelay
+  76:	e7e9      	b.n	4c <wifi_card_device_init+0x4c>
+  78:	6838      	ldr	r0, [r7, #0]
+  7a:	3054      	adds	r0, #84	@ 0x54
+  7c:	f7ff fffe 	bl	0 <wifi_card_device_init>
+			7c: R_ARM_THM_CALL	wifi_card_read_intern_word
+  80:	3010      	adds	r0, #16
+  82:	f7ff fffe 	bl	0 <wifi_card_device_init>
+			82: R_ARM_THM_CALL	wifi_card_read_intern_word
+  86:	234b      	movs	r3, #75	@ 0x4b
+  88:	6033      	str	r3, [r6, #0]
+  8a:	6028      	str	r0, [r5, #0]
+  8c:	2080      	movs	r0, #128	@ 0x80
+  8e:	4b19      	ldr	r3, [pc, #100]	@ (f4 <wifi_card_device_init+0xf4>)
+  90:	9a01      	ldr	r2, [sp, #4]
+  92:	4919      	ldr	r1, [pc, #100]	@ (f8 <wifi_card_device_init+0xf8>)
+  94:	0100      	lsls	r0, r0, #4
+  96:	701a      	strb	r2, [r3, #0]
+  98:	f7ff fffe 	bl	0 <irqSetAUX>
+			98: R_ARM_THM_CALL	irqSetAUX
+  9c:	2080      	movs	r0, #128	@ 0x80
+  9e:	0100      	lsls	r0, r0, #4
+  a0:	f7ff fffe 	bl	0 <irqEnableAUX>
+			a0: R_ARM_THM_CALL	irqEnableAUX
+  a4:	9801      	ldr	r0, [sp, #4]
+  a6:	f7ff fffe 	bl	0 <wifi_sdio_enable_cardirq>
+			a6: R_ARM_THM_CALL	wifi_sdio_enable_cardirq
+  aa:	2083      	movs	r0, #131	@ 0x83
+  ac:	4913      	ldr	r1, [pc, #76]	@ (fc <wifi_card_device_init+0xfc>)
+  ae:	00c0      	lsls	r0, r0, #3
+  b0:	f7ff fffe 	bl	0 <wifi_card_device_init>
+			b0: R_ARM_THM_CALL	wifi_card_write_func1_u32
+  b4:	2103      	movs	r1, #3
+  b6:	2004      	movs	r0, #4
+  b8:	f7ff fffe 	bl	0 <wifi_card_device_init>
+			b8: R_ARM_THM_CALL	wifi_card_write_func0_u8
+  bc:	2103      	movs	r1, #3
+  be:	2002      	movs	r0, #2
+  c0:	4b0f      	ldr	r3, [pc, #60]	@ (100 <wifi_card_device_init+0x100>)
+  c2:	4a10      	ldr	r2, [pc, #64]	@ (104 <wifi_card_device_init+0x104>)
+  c4:	f7ff fffe 	bl	0 <timerStart>
+			c4: R_ARM_THM_CALL	timerStart
+  c8:	2334      	movs	r3, #52	@ 0x34
+  ca:	4a06      	ldr	r2, [pc, #24]	@ (e4 <wifi_card_device_init+0xe4>)
+  cc:	6033      	str	r3, [r6, #0]
+  ce:	0020      	movs	r0, r4
+  d0:	602c      	str	r4, [r5, #0]
+  d2:	6013      	str	r3, [r2, #0]
+  d4:	bcfe      	pop	{r1, r2, r3, r4, r5, r6, r7}
+  d6:	bc02      	pop	{r1}
+  d8:	4708      	bx	r1
+  da:	2401      	movs	r4, #1
+  dc:	4264      	negs	r4, r4
+  de:	e7f3      	b.n	c8 <wifi_card_device_init+0xc8>
+  e0:	00000000 	.word	0x00000000
+			e0: R_ARM_ABS32	.bss.wlan_ctx
+  e4:	0237f000 	.word	0x0237f000
+  e8:	0237f04c 	.word	0x0237f04c
+  ec:	0237f03c 	.word	0x0237f03c
+	...
+			f0: R_ARM_ABS32	.bss.device_host_interest_addr
+			f4: R_ARM_ABS32	.bss.wifi_card_bInitted
+			f8: R_ARM_ABS32	wifi_card_irq
+  fc:	010300d1 	.word	0x010300d1
+ 100:	00000000 	.word	0x00000000
+			100: R_ARM_ABS32	Wifi_TWL_Update
+ 104:	0000ffdf 	.word	0x0000ffdf
+
+Disassembly of section .text.wifi_card_init:
+
+00000000 <wifi_card_init>:
+   0:	b510      	push	{r4, lr}
+   2:	f7ff fffe 	bl	0 <wifi_ndma_init>
+			2: R_ARM_THM_CALL	wifi_ndma_init
+   6:	f7ff fffe 	bl	0 <wifi_sdio_controller_init>
+			6: R_ARM_THM_CALL	wifi_sdio_controller_init
+   a:	f7ff fffe 	bl	0 <wifi_card_init>
+			a: R_ARM_THM_CALL	wifi_card_device_init
+   e:	f7ff fffe 	bl	0 <wmi_init>
+			e: R_ARM_THM_CALL	wmi_init
+  12:	f7ff fffe 	bl	0 <wpa_mbedtls_init>
+			12: R_ARM_THM_CALL	wpa_mbedtls_init
+  16:	bc10      	pop	{r4}
+  18:	bc01      	pop	{r0}
+  1a:	4700      	bx	r0
+
+Disassembly of section .text.wifi_card_init_bmi:
+
+00000000 <ath6k_init_hw_to_bmi>:
+   0:	b510      	push	{r4, lr}
+   2:	f7ff fffe 	bl	0 <wifi_ndma_init>
+			2: R_ARM_THM_CALL	wifi_ndma_init
+   6:	f7ff fffe 	bl	0 <wifi_sdio_controller_init>
+			6: R_ARM_THM_CALL	wifi_sdio_controller_init
+   a:	4c06      	ldr	r4, [pc, #24]	@ (24 <ath6k_init_hw_to_bmi+0x24>)
+   c:	2238      	movs	r2, #56	@ 0x38
+   e:	2100      	movs	r1, #0
+  10:	0020      	movs	r0, r4
+  12:	f7ff fffe 	bl	0 <memset>
+			12: R_ARM_THM_CALL	memset
+  16:	2301      	movs	r3, #1
+  18:	7223      	strb	r3, [r4, #8]
+  1a:	f7ff fffe 	bl	0 <ath6k_init_hw_to_bmi>
+			1a: R_ARM_THM_CALL	wifi_card_wlan_init_bmi
+  1e:	bc10      	pop	{r4}
+  20:	bc02      	pop	{r1}
+  22:	4708      	bx	r1
+  24:	00000000 	.word	0x00000000
+			24: R_ARM_ABS32	.bss.wlan_ctx
+
+Disassembly of section .text.wifi_card_setclk:
+
+00000000 <wifi_card_setclk>:
+   0:	b510      	push	{r4, lr}
+   2:	f7ff fffe 	bl	0 <wifi_sdio_setclk>
+			2: R_ARM_THM_CALL	wifi_sdio_setclk
+   6:	bc10      	pop	{r4}
+   8:	bc01      	pop	{r0}
+   a:	4700      	bx	r0
+
+Disassembly of section .text.wifi_card_stop:
+
+00000000 <wifi_card_stop>:
+   0:	b510      	push	{r4, lr}
+   2:	f7ff fffe 	bl	0 <wifi_sdio_stop>
+			2: R_ARM_THM_CALL	wifi_sdio_stop
+   6:	bc10      	pop	{r4}
+   8:	bc01      	pop	{r0}
+   a:	4700      	bx	r0

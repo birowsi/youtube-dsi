@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+server/vendor/
+server/backup-*/
+
+# Runtime / logs
+*.log
+*.pid
+
+# Build outputs (sd-root/*.nds is kept as the ready-to-copy build)
+build/
+*.o
+*.elf
+*.map
+*.nds
+!sd-root/*.nds
+*.zip
+*.tar.gz
+
+# Emulator / hardware test dumps
+emulator-*/
+*.pcm
+
+# Research checkouts and third-party sources
+investigation/
+tools/*-src/
+tools/*-research/
+tools/bootstrap/
+tools/emutest-build/
+
+# Release artifacts (upload to GitHub Releases instead)
+releases/
+publish/

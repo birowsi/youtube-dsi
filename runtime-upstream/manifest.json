@@ -1,0 +1,10 @@
+{
+  "sdk_tag": "v1.24.0",
+  "files": {
+    "sys/crts/ds_arm7.ld": "ab15a6a61563af1ae57499b0a1259cad6a2fbb21e11e8398d93eeade3a044847",
+    "sys/crts/ds_arm9.ld": "bc9d544bed0fda19ee065e5e941721adfc31996dfab8a88b582ecc91cce38a41",
+    "sys/crts/ds_arm7_crt0.s": "7f9e137381ca4b8a7ce736eb069dea33939a8f3a848439e72fca404885994b46",
+    "sys/crts/ds_arm9_crt0.s": "466daa94d706e72e7d1995d35b8135d451dedce3ed7fc5efe5ad78d9cb7e5c8f",
+    "sys/arm7/main_core/source/main.c": "d071231b30d8bb0ea3427d57d61e2ff9b6d5ea3bfa8ff0341aedd692d036f72a"
+  }
+}
