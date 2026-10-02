@@ -46,6 +46,10 @@ static unsigned volume_asked;
 // in its main loop. Nothing waits for it: a blocking getBatteryLevel() in the UI was
 // where playback hung once the ARM7/FIFO stalled.
 u32 hq_battery_raw=0xFFFFFFFFu;
+// Incremented by the ARM7 main loop every VBlank (address sent once); alone in a cache line.
+static volatile uint32_t arm7_beat[8] __attribute__((aligned(32)));
+static int arm7_beat_sent;
+static uint32_t arm7_beat_read(void) { DC_InvalidateRange((void*)arm7_beat,32);return arm7_beat[0]; }
 static void volume_poll(unsigned now) {
     while(fifoCheckValue32(FIFO_VOLUME)) {
         u32 value=fifoGetValue32(FIFO_VOLUME);
@@ -54,6 +58,7 @@ static void volume_poll(unsigned now) {
             hq_battery_raw=(value>>8)&0xFF;
         }
     }
+    if(!arm7_beat_sent) { arm7_beat_sent=1;fifoSendAddress(FIFO_VOLUME,(void*)arm7_beat); }
     if(now-volume_asked>=500) { volume_asked=now;fifoSendValue32(FIFO_VOLUME,0); }
 }
 void hq_status_poll(void) { volume_poll(sys_now()); }
@@ -90,7 +95,7 @@ static void watchdog_report(int arm7_answered) {
     snprintf(lines[n++],48,"audio %u active %u eof %u fail %u",snap[8],snap[9],snap[10],snap[11]);
     snprintf(lines[n++],48,"ARM7 answers: %s",arm7_answered<0?"checking...":arm7_answered?"yes":"NO");
     if(arm7_answered>=0)
-        snprintf(lines[n++],48,"ARM7 main loop: %s",(REG_IPC_SYNC&15)!=arm7_beat_first?"running":"STOPPED");
+        snprintf(lines[n++],48,"ARM7 main loop: %s",arm7_beat_read()!=arm7_beat_first?"running":"STOPPED");
     snprintf(lines[n++],48,"rx stack peak %u",rx_peak);
     snprintf(lines[n++],48,"net stacks %u %u %u (%d)",hq_net_stack_peak(0),hq_net_stack_peak(1),
              hq_net_stack_peak(2),hq_net_stack_count());
@@ -104,7 +109,7 @@ static void watchdog(void) {
     if(main_beat!=watch_last) { watch_last=main_beat;watch_count=0;watch_stage=0;return; }
     watch_count++;
     if(watch_count==180) {
-        arm7_beat_first=REG_IPC_SYNC&15;
+        arm7_beat_first=arm7_beat_read();
         unsigned values[12]={main_phase,main_beat,0,rx_phase,rx_sub,rx_beat,
                              received,released,audio_count,audio_active,eof,failed};
         memcpy(snap,values,sizeof(snap));

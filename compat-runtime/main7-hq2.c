@@ -60,6 +60,13 @@ void vblank_handler(void)
 // HQ2: cached DSi volume/battery for the ARM9 (see tools/prepare_hq2_arm7.py).
 #define FIFO_VOLUME FIFO_USER_08
 static volatile u32 hq2_status;
+static volatile u32 *hq2_beat;
+
+static void beat_address(void *address, void *userdata)
+{
+    (void)userdata;
+    hq2_beat = (volatile u32 *)address;
+}
 
 static void volume_request(u32 value, void *userdata)
 {
@@ -117,6 +124,7 @@ int main(void)
 
     installSystemFIFO(); // Sleep mode, storage, firmware...
     fifoSetValue32Handler(FIFO_VOLUME, volume_request, 0);
+    fifoSetAddressHandler(FIFO_VOLUME, beat_address, 0);
     if (isDSiMode())
         installCameraFIFO();
 
@@ -156,10 +164,11 @@ int main(void)
 
         swiWaitForVBlank();
 
-        // Heartbeat for the ARM9 watchdog: IPC sync output bits 8-11.
+        // Heartbeat for the ARM9 watchdog, in a word the ARM9 gave us.
         static u32 beat;
         beat++;
-        REG_IPC_SYNC = (REG_IPC_SYNC & IPC_SYNC_IRQ_ENABLE) | ((beat & 0xF) << 8);
+        if (hq2_beat)
+            *hq2_beat = beat;
         if (beat % 60 == 1)
             hq2_refresh_status();
     }
