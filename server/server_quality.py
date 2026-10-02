@@ -243,6 +243,9 @@ def read_feedback(sock, controller, stop):
             while b'\n' in pending:
                 line, pending = pending.split(b'\n', 1)
                 words = line.split()
+                if words[:1] == [b'DBG']:
+                    controller.debug = line.decode('ascii', 'replace')[4:]
+                    continue
                 if len(words) in (3,4,5,6) and words[0] == b'BUF':
                     ms, mode = int(words[1]), int(words[2])
                     if 0 <= ms <= 10000 and 0 <= mode <= 3:
@@ -318,7 +321,7 @@ def send_stream(sock, frames, v3=False, ok=b'OK STREAM\n'):
         name = os.path.join(DUMP_DIR, time.strftime('%Y%m%d-%H%M%S'))
         dump, trace = open(name + '.yds', 'wb'), open(name + '.tsv', 'w')
         dump.write(HEADER3 if v3 else HEADER)
-        trace.write('time\tpacket\tfeedback\trate\tq\tjpeg_bytes\n')
+        trace.write('time\tpacket\tfeedback\trate\tq\tjpeg_bytes\tdsi_debug\n')
     try:
         for image, pcm in itertools.chain([first], frames):
             if REPLACE.is_set():
@@ -332,7 +335,9 @@ def send_stream(sock, frames, v3=False, ok=b'OK STREAM\n'):
             if dump:
                 dump.write(packet)
                 trace.write(f'{time.time():.2f}\t{count}\t{getattr(encoder, "feedback", "")}\t'
-                            f'{round(getattr(encoder, "rate", 0))}\t{q}\t{len(jpeg)}\n')
+                            f'{round(getattr(encoder, "rate", 0))}\t{q}\t{len(jpeg)}\t'
+                            f'{getattr(encoder, "debug", "")}\n')
+                trace.flush()
             send_all(sock, packet)
             count += 1
             total += len(packet)

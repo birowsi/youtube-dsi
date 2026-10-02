@@ -354,7 +354,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
     unsigned shown=~0u,decoded=0,dropped=0,rebuffer_count=0,decode_ms=0,decode_max=0;
     unsigned last_ui=0,last_feedback=0,last_bytes=0,net_rate=0,tail_start=0;
     unsigned late_reported=0,decode_sum=0,decode_n=0,decode_avg=0,pictures_mark=0,picture_fps=0;
-    char feedback[48];unsigned feedback_size=0,feedback_sent=0;
+    char feedback[200];unsigned feedback_size=0,feedback_sent=0;
     PlayerView view={.title_bitmap=title_bitmap,.title_text=title_text,.volume=-1,
                      .duration=duration,.seek_target=-1,.seconds=(unsigned)start};
     static int show_stats;
@@ -483,6 +483,12 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             // A trailing 1 asks the relay to stop sending pictures while the lid is closed.
             feedback_size=snprintf(feedback,sizeof(feedback),lid?"BUF %u %u %u %u 1\n":"BUF %u %u %u %u\n",
                                    buffer_ms,mode,decode_avg,late);
+            // Flight recorder (diagnostic): the relay logs this line, so the second before
+            // a hang is on record even when the DSi can no longer show anything.
+            feedback_size+=snprintf(feedback+feedback_size,sizeof(feedback)-feedback_size,
+                "DBG a7 %lu fifo %04X main %u/%u rx %u.%u/%u got %u rel %u aud %u st %u/%u/%u\n",
+                (unsigned long)arm7_beat_read(),(unsigned)REG_IPC_FIFO_CR,main_phase,main_beat,rx_phase,rx_sub,rx_beat,
+                received,released,audio_count,hq_net_stack_peak(1),hq_net_stack_peak(2),rx_peak);
             feedback_sent=0;last_feedback=now;
         }
         if(!eof && feedback_sent<feedback_size) {
