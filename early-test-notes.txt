@@ -54,7 +54,7 @@ YouTube DSi 시험 버전 — 2026-10-01
    시험 영상의 440Hz 음과 실제 유튜브 영상의 음성을 에뮬레이터 SPU 출력에서 검증.
    일시정지 중 화면 유지 및 재개 후 재생 시간 진행 확인.
    네트워크 협력 스레드를 실행하지 못하던 대기 루프를 수정함.
-   결과: emulator-final/*.png, emulator-final/verification.json, melonDS-검증.txt.
+   결과: emulator-final/*.png, emulator-final/verification.json, melonDS-verification.txt.
 
 개발
    클라이언트: client/source/main.c, client/Makefile
@@ -63,7 +63,7 @@ YouTube DSi 시험 버전 — 2026-10-01
    서버 시험: python tools/smoke_test.py --live
    빌드 도구: /opt/wonderful (WSL); BlocksDS SDK/도구는 공식 Wonderful 패키지로 설치됨.
    서버 라이브러리 갱신: python -m pip install --upgrade --target server/vendor "yt-dlp[default]"
-   에뮬레이터 시험기 소스: tools/emutest. 재실행 명령은 melonDS-검증.txt 참고.
+   에뮬레이터 시험기 소스: tools/emutest. 재실행 명령은 melonDS-verification.txt 참고.
 
 참고
    https://github.com/Gericom/YoutubeDS (기존 앱 조사; 이번 앱은 별도로 구현)

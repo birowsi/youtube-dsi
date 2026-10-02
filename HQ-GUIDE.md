@@ -1,6 +1,6 @@
 # YouTubeDSi HQ 사용·품질 설정
 
-기준판의 부팅·Wi-Fi 해결 내용은 [해결기록.md](해결기록.md)에 있다.
+기준판의 부팅·Wi-Fi 해결 내용은 [TROUBLESHOOTING-LOG.md](TROUBLESHOOTING-LOG.md)에 있다.
 새 고화질판의 실기기 검증은 아직 필요하다. 에뮬레이터 결과와 구분한다.
 
 ## 실행
@@ -95,7 +95,7 @@ Skip이 늘고 Buffer가 충분하면 CPU 처리 문제가 남은 것이다. Buf
 기록한다. Python·FFmpeg·전체 SDK 도구 체인은 별도로 준비해야 한다.
 
 빌드는 WSL Ubuntu-22.04에서 프로젝트 루트의 `sh tools/build_quality.sh`.
-SDK와 라이브러리 버전은 `해결기록.md`의 고정값을 사용한다. JPEG는 ChaN TJpgDec
+SDK와 라이브러리 버전은 `TROUBLESHOOTING-LOG.md`의 고정값을 사용한다. JPEG는 ChaN TJpgDec
 R0.03이며 라이선스를 보존했다. ARM 모드/O3, ITCM, 크기 변경 없는 RGB565 직접
 출력 수정은 `investigation/quality/tjpgd-local.patch`에 전체 diff로 남겼다.
 32kHz ADPCM은 손실 압축이다. 코덱의 440/660Hz 시험 SNR은 약 40.9dB이며,

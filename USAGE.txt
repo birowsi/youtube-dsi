@@ -25,11 +25,11 @@ Compat: 128x96 확대 / 8fps / RGB332 / 16kHz 모노
 HQ는 미리 받는 버퍼와 자동 JPEG 품질 조절을 사용한다.
 DSi 모드와 CPU 133MHz 조건에서 사용한다.
 
-상세 사용·품질·검증 한계: 고화질판-사용법.md
-흰 화면·접속 해결 원인, 고정 버전, 재빌드·복원: 해결기록.md
+상세 사용·품질·검증 한계: HQ-GUIDE.md
+흰 화면·접속 해결 원인, 고정 버전, 재빌드·복원: TROUBLESHOOTING-LOG.md
 상세 원본 조사: investigation/HARDWARE_FINDINGS.md
 실기기 성공 기준판 백업: releases/YouTubeDSiCompat-20261001.zip
 새 HQ 검증 수치: investigation/quality/verification.json
 
-사용법-초기실험.txt 는 과거 TWL/WPA 시험 단계 기록이다.
+early-test-notes.txt 는 과거 TWL/WPA 시험 단계 기록이다.
 그 파일의 WPA2 지원·실기기 미확인·기본 make 안내는 현재 사용법이 아니다.

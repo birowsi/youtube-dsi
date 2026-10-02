@@ -128,7 +128,7 @@ python3 tools/analyze_compat.py
 
 개선판은 별도 이름 `YouTubeDSiHQ.nds`, 릴레이 `start-quality-server.cmd`와 포트
 8767을 사용한다. 기존 8765 릴레이와 기준판을 보존한다. 자세한 설정·품질 한계와
-검증 수치는 `investigation/quality`의 기록 및 `고화질판-사용법.md`를 참조한다.
+검증 수치는 `investigation/quality`의 기록 및 `HQ-GUIDE.md`를 참조한다.
 실기기 검증 상태와 에뮬레이터 검증 상태를 구분해 기록한다.
 
 ## bunjalloo·post-title exploit 환경 추가 조사
@@ -154,7 +154,7 @@ Decode(Wi-Fi 처리 포함) 60ms 초과 때마다 22%씩 깎이고 거의 다시
 수를 줄인다(0바이트 = 이전 그림 유지). 밑 화면은 DSi Desk 스타일로 새로 그렸고, 검색 제목은
 PC가 Galmuri9로 렌더링해 한국어·일본어도 표시된다. 별도 이름 `YouTubeDSiHQ2.nds`,
 소스 `client-hq2/`이며 기존 HQ/Compat ROM과 `client/`는 바꾸지 않았다. 서버는 PLAY2/TEST2를
-그대로 유지했고, 원본은 `server/backup-20261001/`에 있다. 상세: [HQ2-사용법.md](HQ2-사용법.md).
+그대로 유지했고, 원본은 `server/backup-20261001/`에 있다. 상세: [HQ2-GUIDE.md](HQ2-GUIDE.md).
 실기 검증 전이다.
 
 ## 제작자 표기 통일 (2026-10-02)
