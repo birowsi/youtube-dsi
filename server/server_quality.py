@@ -24,6 +24,7 @@ from pathlib import Path
 import audioop
 import io
 import ipaddress
+import os
 import itertools
 import logging
 import math
@@ -48,6 +49,8 @@ TEST_STALL_MS = 0
 # Set by a new PLAY request so the stream still holding PLAY_LOCK ends at once.
 REPLACE = threading.Event()
 ACTIVE = None   # socket of the stream holding PLAY_LOCK
+# Debug: YTDSI_DUMP=<dir> records every sent stream (.yds) and the DSi feedback (.tsv).
+DUMP_DIR = os.environ.get('YTDSI_DUMP')
 
 
 class StereoIMA:
@@ -271,6 +274,12 @@ def send_stream(sock, frames, v3=False):
     sock.settimeout(1)
     send_all(sock, b'OK STREAM\n' + (HEADER3 if v3 else HEADER))
     count, total, pictures = 0, 0, 0
+    dump = trace = None
+    if DUMP_DIR:
+        name = os.path.join(DUMP_DIR, time.strftime('%Y%m%d-%H%M%S'))
+        dump, trace = open(name + '.yds', 'wb'), open(name + '.tsv', 'w')
+        dump.write(HEADER3 if v3 else HEADER)
+        trace.write('time\tpacket\tfeedback\trate\tq\tjpeg_bytes\n')
     try:
         for image, pcm in itertools.chain([first], frames):
             if REPLACE.is_set():
@@ -279,6 +288,10 @@ def send_stream(sock, frames, v3=False):
             jpeg, q = encoder.encode(image)
             block = audio.encode(pcm)
             packet = struct.pack('<4I', count, len(jpeg), len(block), q) + jpeg + block
+            if dump:
+                dump.write(packet)
+                trace.write(f'{time.time():.2f}\t{count}\t{getattr(encoder, "feedback", "")}\t'
+                            f'{round(getattr(encoder, "rate", 0))}\t{q}\t{len(jpeg)}\n')
             send_all(sock, packet)
             count += 1
             total += len(packet)
@@ -303,6 +316,9 @@ def send_stream(sock, frames, v3=False):
     finally:
         stop.set()
         feedback.join(timeout=1)
+        for file in (dump, trace):
+            if file:
+                file.close()
 
 
 def test_frames(seconds=24):

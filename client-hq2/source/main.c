@@ -58,7 +58,7 @@ static int wifi_worker(void *unused) {
 }
 
 static int connect_saved_wifi(void) {
-    if (cothread_create(wifi_worker, NULL, 8192, COTHREAD_DETACHED) < 0) return 0;
+    if (cothread_create(wifi_worker, NULL, 16 * 1024, COTHREAD_DETACHED) < 0) return 0;
     unsigned frames = 0;
     char line[48];
     while (!wifi_finished) {

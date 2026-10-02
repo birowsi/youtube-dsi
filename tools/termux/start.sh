@@ -3,6 +3,8 @@
 # Also installed as ~/.termux/boot/start-youtube-dsi.sh, so Termux:Boot runs it at power-on.
 termux-wake-lock
 cd ~/youtube-dsi/server || exit 1
+# Optional settings, e.g. "export YTDSI_DUMP=$HOME/youtube-dsi/dumps" to record streams.
+[ -f relay.env ] && . ./relay.env
 if [ -f relay.pid ] && kill -0 "$(cat relay.pid)" 2>/dev/null; then
     echo "Relay already running (pid $(cat relay.pid))"
     exit 0

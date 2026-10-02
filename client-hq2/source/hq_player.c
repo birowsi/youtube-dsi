@@ -104,8 +104,10 @@ static void put_audio(const int16_t *pcm) {
 }
 static int receiver(void *unused) {
     (void)unused;
-    uint8_t encoded[SAMPLES+8];
-    int16_t pcm[SAMPLES*2];
+    // Static, not on this thread's stack: lwIP runs its receive path on the caller's
+    // stack, and on hardware a 10 KB local frame overflowed it into the cothread list.
+    static uint8_t encoded[SAMPLES+8];
+    static int16_t pcm[SAMPLES*2];
     while(!stop_reader) {
         while(!stop_reader && (received-released>=SLOTS || audio_count>AUDIO_SIZE-PCM_BYTES))
             cothread_yield_irq(IRQ_VBLANK);
@@ -206,7 +208,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
        header[5]!=SAMPLES || header[6]!=2 || header[7]!=1 || header[8]!=1) {
         snprintf(error_text,error_size,"HQ relay/version mismatch");return 0;
     }
-    if(cothread_create(receiver,NULL,24*1024,COTHREAD_DETACHED)<0) {
+    if(cothread_create(receiver,NULL,64*1024,COTHREAD_DETACHED)<0) {
         snprintf(error_text,error_size,"Can't start stream receiver");return 0;
     }
     mm_stream stream={.sampling_rate=RATE,.buffer_length=2048,.callback=fill_audio,
