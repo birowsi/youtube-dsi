@@ -64,6 +64,45 @@ static void rx_stack_check(void) {
     unsigned used=sizeof(rx_stack)-i*4;
     if(used>rx_peak)rx_peak=used;
 }
+// Watchdog (diagnostic): the VBlank IRQ checks that the playback loop still runs.
+// A hang with interrupts alive (sound fades to silence) shows where each thread was.
+static volatile unsigned main_beat, main_phase, rx_beat, rx_phase, rx_sub;
+static volatile int watch_on;
+static unsigned watch_last, watch_count, watch_stage;
+static unsigned snap[12];
+static void watchdog_report(int arm7_answered) {
+    static char lines[10][48];
+    const char *list[10];
+    int n=0;
+    snprintf(lines[n++],48,"HQ2 stalled - please photograph");
+    snprintf(lines[n++],48,"main phase %u beat %u battery %u",snap[0],snap[1],snap[2]);
+    snprintf(lines[n++],48,"rx phase %u.%u beat %u",snap[3],snap[4],snap[5]);
+    snprintf(lines[n++],48,"received %u released %u",snap[6],snap[7]);
+    snprintf(lines[n++],48,"audio %u active %u eof %u fail %u",snap[8],snap[9],snap[10],snap[11]);
+    snprintf(lines[n++],48,"ARM7 answers: %s",arm7_answered<0?"checking...":arm7_answered?"yes":"NO");
+    snprintf(lines[n++],48,"rx stack peak %u",rx_peak);
+    for(int i=0;i<n;i++)list[i]=lines[i];
+    ui_crash(list,n);
+}
+static void watchdog(void) {
+    if(!watch_on || watch_stage>=2)return;
+    if(main_beat!=watch_last) { watch_last=main_beat;watch_count=0;watch_stage=0;return; }
+    watch_count++;
+    if(watch_count==180) {
+        extern volatile int ui_battery_wait;
+        unsigned values[12]={main_phase,main_beat,(unsigned)ui_battery_wait,rx_phase,rx_sub,rx_beat,
+                             received,released,audio_count,audio_active,eof,failed};
+        memcpy(snap,values,sizeof(snap));
+        // Ask the ARM7 something it answers from its FIFO handler (the volume).
+        while(fifoCheckValue32(FIFO_VOLUME))fifoGetValue32(FIFO_VOLUME);
+        fifoSendValue32(FIFO_VOLUME,0);
+        watchdog_report(-1);
+        watch_stage=1;
+    } else if(watch_stage==1 && watch_count==240) {
+        watchdog_report(fifoCheckValue32(FIFO_VOLUME));
+        watch_stage=2;
+    }
+}
 // Crash screen: no stdio, no heap, no FIFO (the heap may be the damaged part).
 static char crash_lines[17][48];
 static int crash_count;
@@ -115,7 +154,9 @@ void hq_video_reset(void) {
     front_page=0;
     bgSetMapBase(video_bg,0);
 }
+static void watchdog(void);
 static void present_frame(void) {
+    watchdog();
     if(pending_page>=0) {
         bgSetMapBase(video_bg,pending_page*8);
         front_page=pending_page;pending_page=-1;
@@ -136,6 +177,7 @@ void hq_video_init(void) {
 static int read_exact(void *destination,unsigned size) {
     unsigned done=0, last=sys_now();
     while(done<size && !stop_reader) {
+        rx_sub=1;
         int n=recv(socket_fd,(uint8_t*)destination+done,size-done,0);
         if(n>0) { done+=n;total_bytes+=n;last=sys_now();continue; }
         if(!n)return done ? -1 : 0;
@@ -143,7 +185,9 @@ static int read_exact(void *destination,unsigned size) {
         fd_set readable;FD_ZERO(&readable);FD_SET(socket_fd,&readable);
         struct timeval timeout={.tv_sec=0,.tv_usec=100000};
         // A semaphore-based socket wait wakes on packets, not just VBlank.
+        rx_sub=2;
         int ready=select(socket_fd+1,&readable,NULL,NULL,&timeout);
+        rx_sub=3;
         if(ready<0 && errno!=EINTR)return -1;
         if(sys_now()-last>30000)return -1;
     }
@@ -167,10 +211,12 @@ static int receiver(void *unused) {
     static uint8_t encoded[SAMPLES+8];
     static int16_t pcm[SAMPLES*2];
     while(!stop_reader) {
+        rx_beat++;rx_phase=1;
         while(!stop_reader && (received-released>=SLOTS || audio_count>AUDIO_SIZE-PCM_BYTES))
             cothread_yield_irq(IRQ_VBLANK);
         if(stop_reader)break;
         uint32_t chunk[4];
+        rx_phase=2;
         int result=read_exact(chunk,sizeof(chunk));
         if(!result) { eof=1;break; }
         if(result<0) { if(!stop_reader)failed=1;break; }
@@ -178,18 +224,23 @@ static int receiver(void *unused) {
         if(chunk[0]!=received || (!chunk[1] && !received) || chunk[1]>JPEG_MAX ||
            chunk[2]!=sizeof(encoded) || chunk[3]>100) { failed=1;break; }
         VideoPacket *packet=&packets[received%SLOTS];
-        if((chunk[1] && read_exact(packet->jpeg,chunk[1])<1) || read_exact(encoded,sizeof(encoded))<1) {
+        rx_phase=3;
+        if((chunk[1] && read_exact(packet->jpeg,chunk[1])<1) || (rx_phase=4,read_exact(encoded,sizeof(encoded))<1)) {
             if(!stop_reader)failed=1;
             break;
         }
+        rx_phase=5;
         if(hq_decode_ima(encoded,sizeof(encoded),pcm,SAMPLES)!=SAMPLES) { failed=1;break; }
         packet->length=chunk[1];packet->quality=chunk[3];
+        rx_phase=6;
         put_audio(pcm);
         __asm__ volatile("" ::: "memory");
         received++;
         // Let the renderer and lwIP run even during a large buffered burst.
+        rx_phase=7;
         cothread_yield();
     }
+    rx_phase=8;
     reader_done=1;
     return 0;
 }
@@ -287,14 +338,19 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
     static int show_stats;
     int ui_mode=-1,ui_pressed=0,toggle=0;
     if(!resumed)hq_video_reset();
+    watch_last=main_beat;watch_count=watch_stage=0;watch_on=1;
     while(1) {
         int drew=0;
+        main_beat++;main_phase=1;
         scanKeys();unsigned now=sys_now();
         // With the lid closed, keep the sound going and skip picture decoding.
         int lid=hq_lid_update();
         volume_poll(now);
 #ifdef HQ2_CRASH_TEST
         if(keysDown()&KEY_SELECT)__builtin_trap();   // emulator check of the crash screen
+#endif
+#ifdef HQ2_HANG_TEST
+        if(keysDown()&KEY_SELECT)for(;;);   // emulator check of the watchdog
 #endif
         if(now-last_check>=500) {
             last_check=now;rx_stack_check();
@@ -364,7 +420,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
         unsigned target=started ? RATE*4*5/2 : resumed ? RATE*4*3/2 : RATE*4*3;
         if(!paused && !audio_active && (audio_count>=target || (eof && audio_count))) {
             audio_active=1;rebuffer=0;
-            if(!started) { started=1;mmStreamOpen(&stream); }
+            if(!started) { started=1;main_phase=2;mmStreamOpen(&stream); }
         }
         if(started && !paused && audio_active && received) {
             unsigned current=(played_samples>stream.buffer_length ?
@@ -378,6 +434,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
                 unsigned target=current;
                 while(target!=shown && target && !packets[target%SLOTS].length)target--;
                 if(packets[target%SLOTS].length && target!=shown) {
+                    main_phase=3;
                     if(!draw_packet(&packets[target%SLOTS], &decode_ms)) { failed=1;hq_stats[14]++;break; }
                     if(decode_ms>decode_max)decode_max=decode_ms;
                     decode_sum+=decode_ms;decode_n++;
@@ -407,6 +464,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             feedback_sent=0;last_feedback=now;
         }
         if(!eof && feedback_sent<feedback_size) {
+            main_phase=4;
             int n=send(fd,feedback+feedback_sent,feedback_size-feedback_sent,0);
             if(n>0)feedback_sent+=n;
         }
@@ -422,6 +480,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             view.decode_ms=decode_avg;view.late=dropped;view.rebuffers=rebuffer_count;
             view.gaps=starvation_count;view.pressed=ui_pressed;view.show_stats=show_stats;
             view.volume=volume_level;view.stack_kib=(rx_peak+1023)/1024;
+            main_phase=5;
             ui_player(&view);
         }
         hq_stats[1]=received;hq_stats[2]=played_samples;hq_stats[3]=decoded;
@@ -429,9 +488,11 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
         hq_stats[7]=decode_ms;hq_stats[8]=decode_max;hq_stats[9]=dropped;
         hq_stats[10]=total_bytes;hq_stats[12]=mode;hq_stats[13]=net_rate;
         hq_stats[15]=shown;
+        main_phase=6;
         if(drew || (started && !paused && audio_active))cothread_yield();
         else cothread_yield_irq(IRQ_VBLANK);
     }
+    watch_on=0;
     audio_active=0;
     if(started)mmStreamClose();
     stop_reader=1;

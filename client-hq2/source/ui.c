@@ -171,8 +171,11 @@ static void publish(void) {
     DC_FlushRange(paint, sizeof(paint));
     dmaCopyHalfWords(3, paint, sub_vram, sizeof(paint));
 }
+volatile int ui_battery_wait;  // diagnostic: set while waiting for the ARM7's answer
 static void battery_icon(uint16_t *s, int x, int y) {
+    ui_battery_wait = 1;
     unsigned raw = getBatteryLevel() & BATTERY_LEVEL_MASK, level = (raw + 3) / 4;
+    ui_battery_wait = 0;
     outline(s, x, y, 20, 9, MUTED); rect(s, x + 20, y + 2, 2, 5, MUTED);
     for (unsigned i = 0; i < level && i < 4; i++) rect(s, x + 2 + i * 4, y + 2, 3, 5, level <= 1 ? WARNING : INK);
 }
