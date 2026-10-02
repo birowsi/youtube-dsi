@@ -15,6 +15,8 @@ void ui_top_tick(void);  // call once per VBlank while menus are shown
 
 void ui_status(const char *title, const char *line1, const char *line2, const char *hint);
 void ui_error(const char *message);
+// Exception screen: plain text lines, written straight to VRAM without DMA.
+void ui_crash(const char *const *lines, int count);
 
 void ui_home(const char *host, int port, int pressed);
 int ui_home_hit(int x, int y);  // 1 search, 2 test, 3 server IP, 0 none

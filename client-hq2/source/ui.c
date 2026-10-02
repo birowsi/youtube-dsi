@@ -270,6 +270,12 @@ void ui_status(const char *title, const char *line1, const char *line2, const ch
     publish();
 }
 
+void ui_crash(const char *const *lines, int count) {
+    rect(paint, 0, 0, W, H, WARNING);
+    for (int i = 0; i < count; i++) text_at(paint, 3, 2 + i * 11, lines[i], PAPER, 1);
+    for (int i = 0; i < W * H; i++) sub_vram[i] = paint[i];
+}
+
 void ui_error(const char *message) {
     begin();
     title_bar("Something went wrong", NULL);

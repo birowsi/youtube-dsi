@@ -64,21 +64,36 @@ static void rx_stack_check(void) {
     unsigned used=sizeof(rx_stack)-i*4;
     if(used>rx_peak)rx_peak=used;
 }
-static void dump_words(uint32_t address) {
-    if(address<0x02000000 || address>=0x03000000) { printf("  (not RAM)\n");return; }
+// Crash screen: no stdio, no heap, no FIFO (the heap may be the damaged part).
+static char crash_lines[17][48];
+static int crash_count;
+static void crash_dump(const char *name, uint32_t address) {
+    if(address<0x02000000 || address>=0x03000000) {
+        snprintf(crash_lines[crash_count++],48,"%s %08lX (not RAM)",name,(unsigned long)address);return;
+    }
     const uint32_t *p=(const uint32_t *)((address&~3u)-16);
-    for(int row=0;row<5;row++,p+=3)
-        printf("%08lX %08lX %08lX %08lX\n",(unsigned long)(uintptr_t)p,(unsigned long)p[0],(unsigned long)p[1],(unsigned long)p[2]);
+    snprintf(crash_lines[crash_count++],48,"%s:",name);
+    for(int row=0;row<4;row++,p+=3)
+        snprintf(crash_lines[crash_count++],48,"%08lX %08lX %08lX %08lX",(unsigned long)(uintptr_t)p,
+                 (unsigned long)p[0],(unsigned long)p[1],(unsigned long)p[2]);
 }
 void hq_crash_handler(void) {
-    consoleDemoInit();
     const uint32_t *r=(const uint32_t *)exceptionRegisters;
-    printf("\x1b[41mHQ2 crash (please photograph)\n");
-    printf("pc %08lX lr %08lX\nsp %08lX\n",(unsigned long)r[15],(unsigned long)r[14],(unsigned long)r[13]);
-    for(int i=0;i<8;i+=2) printf("r%d %08lX  r%d %08lX\n",i,(unsigned long)r[i],i+1,(unsigned long)r[i+1]);
-    printf("rx stack peak %u guard %u %08lX\n",rx_peak,rx_guard_word,(unsigned long)rx_guard_value);
-    printf("r4:\n");dump_words(r[4]);
-    printf("r0:\n");dump_words(r[0]);
+    // Show something at once, before formatting anything.
+    { static const char *const first[]={"HQ2 crash..."}; ui_crash(first,1); }
+    crash_count=0;
+    snprintf(crash_lines[crash_count++],48,"HQ2 crash - please photograph");
+    snprintf(crash_lines[crash_count++],48,"pc %08lX lr %08lX sp %08lX",
+             (unsigned long)r[15],(unsigned long)r[14],(unsigned long)r[13]);
+    for(int i=0;i<8;i+=4)
+        snprintf(crash_lines[crash_count++],48,"r%d-%d %08lX %08lX %08lX %08lX",i,i+3,
+                 (unsigned long)r[i],(unsigned long)r[i+1],(unsigned long)r[i+2],(unsigned long)r[i+3]);
+    snprintf(crash_lines[crash_count++],48,"rx peak %u guard %u %08lX",rx_peak,rx_guard_word,(unsigned long)rx_guard_value);
+    crash_dump("r4",r[4]);
+    crash_dump("r0",r[0]);
+    const char *lines[17];
+    for(int i=0;i<crash_count;i++)lines[i]=crash_lines[i];
+    ui_crash(lines,crash_count);
     while(1);
 }
 // Retained telemetry for reproducible emulator/hardware playback checks.
@@ -277,6 +292,9 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
         // With the lid closed, keep the sound going and skip picture decoding.
         int lid=hq_lid_update();
         volume_poll(now);
+#ifdef HQ2_CRASH_TEST
+        if(keysDown()&KEY_SELECT)__builtin_trap();   // emulator check of the crash screen
+#endif
         if(now-last_check>=500) {
             last_check=now;rx_stack_check();
             if(rx_guard_word) {
