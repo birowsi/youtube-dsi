@@ -100,3 +100,18 @@ Galmuri9 글꼴, 얇은 테두리, 눌리면 1픽셀 들어가는 버튼을 쓴�
   서버 기록은 384프레임 중 그림 207장(덮개 닫힌 구간 생략), 열고 난 뒤 화면이 다시 갱신됐다.
   에뮬레이터의 가상 네트워크는 방송 패킷을 PC로 넘기지 않아 자동 찾기는 PC 쪽 UDP 응답만 시험했다. 실기 확인 필요.
 - 에뮬레이터 하네스(`tools/emutest/main.cpp`)에 `lid 1` / `lid 0` 제어 명령을 추가했다.
+
+## 안드로이드 폰에서 서버 돌리기 (Termux)
+
+PC 대신 집에 둔 안드로이드 폰(예: 갤럭시 S8)에서 HQ/HQ2 서버를 돌릴 수 있다.
+폰이 DSi와 같은 Wi-Fi에 있으면 자동 찾기가 폰을 찾으므로 DSi 설정은 바꿀 필요가 없다.
+
+1. GitHub 공식 릴리스의 Termux(`termux-app ... arm64-v8a.apk`)와 Termux:Boot를 설치하고 Termux를 한 번 연다.
+2. `server/server.py`, `server/server_quality.py`, `server/fonts/`, `tools/termux/`를 폰의 `~/youtube-dsi/` 아래에 같은 구조로 복사한다.
+   (`server/vendor`는 Windows용이라 복사하지 않는다. 폰에서는 pip로 받은 yt-dlp를 쓴다.)
+3. Termux에서 `sh ~/youtube-dsi/tools/termux/setup.sh`: Python, Pillow, ffmpeg, Node.js, yt-dlp 설치와 부팅 자동 시작 등록.
+4. `~/youtube-dsi/tools/termux/start.sh`로 시작, `stop.sh`로 정지. 기록은 `~/youtube-dsi/server/relay.log`.
+5. Termux:Boot 앱을 한 번 열어 두면, 폰을 켤 때마다 서버가 자동으로 시작된다.
+
+폰이 서버일 때는 PC의 `start-quality-server.cmd`를 켜지 않는다(둘 다 켜져 있으면 DSi가 먼저 응답한 쪽에 붙는다).
+안드로이드 배터리 최적화에서 Termux를 "제한 없음"으로 두어야 화면이 꺼져도 서버가 멈추지 않는다.
