@@ -8,8 +8,9 @@ int hq_lid_update(void);
 // Crash screen that never dereferences the crashed stack; shows memory around r0/r4.
 void hq_crash_handler(void);
 // start/duration in seconds (duration 0: unknown, no seeking). Returns 1 with
-// *seek_to >= 0 when the user picked a new position with Left/Right.
+// *seek_to >= 0 when the user picked a new position on the bar. `resumed` marks a
+// stream reopened by a seek: the last picture stays up and playback starts sooner.
 int hq_playback(int fd, char *error, unsigned error_size,
                 const uint8_t *title_bitmap, const char *title_text,
-                int start, int duration, int *seek_to);
+                int start, int duration, int *seek_to, int resumed);
 #endif

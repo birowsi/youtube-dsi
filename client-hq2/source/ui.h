@@ -42,6 +42,7 @@ typedef struct {
     int seek_target;              // seconds, while Left/Right is choosing; -1 none
 } PlayerView;
 void ui_player(const PlayerView *view);
-int ui_player_hit(int x, int y);  // 1 pause/resume, 2 back, 3 stats, 0 none
+int ui_player_hit(int x, int y);  // 1 pause/resume, 2 back, 3 stats, 4 position bar, 0 none
+int ui_player_bar_seconds(int x, int duration);
 
 #endif

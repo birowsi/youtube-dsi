@@ -255,9 +255,10 @@ static int draw_packet(VideoPacket *packet, unsigned *decode_ms) {
 }
 
 int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,const char *title_text,
-                int start,int duration,int *seek_to) {
+                int start,int duration,int *seek_to,int resumed) {
     *seek_to=-1;
-    int seek_target=-1;unsigned seek_at=0,last_check=0;
+    int seek_target=-1,scrubbing=0;unsigned last_check=0;
+    unsigned arrow_since=0,arrow_last=0;
     socket_fd=fd;error_text=error;error_size=size;
     stop_reader=reader_done=eof=failed=audio_active=0;
     received=released=audio_count=audio_out=audio_in=played_samples=0;
@@ -285,7 +286,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
                      .duration=duration,.seek_target=-1,.seconds=(unsigned)start};
     static int show_stats;
     int ui_mode=-1,ui_pressed=0,toggle=0;
-    hq_video_reset();
+    if(!resumed)hq_video_reset();
     while(1) {
         int drew=0;
         scanKeys();unsigned now=sys_now();
@@ -303,29 +304,49 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
                 failed=1;break;
             }
         }
-        unsigned down=keysDown();
+        unsigned down=keysDown(),held=keysHeld();
+        touchPosition t;touchRead(&t);
         int hit=0;
         if(down&KEY_TOUCH) {
-            touchPosition t;touchRead(&t);hit=ui_player_hit(t.px,t.py);
+            hit=ui_player_hit(t.px,t.py);
             if(hit==1 || hit==2)ui_pressed=hit;
             if(hit==3) { show_stats=!show_stats;last_ui=0; }
+            if(hit==4 && duration>0 && started)scrubbing=1;
         }
-        if(ui_pressed && !(keysHeld()&KEY_TOUCH)) {
+        // Touch: drag on the bar to pick a position, release to jump there.
+        if(scrubbing) {
+            if(held&KEY_TOUCH) {
+                int at=ui_player_bar_seconds(t.px,duration);
+                if(at!=seek_target) { seek_target=at;last_ui=0; }
+            } else {
+                scrubbing=0;
+                if(seek_target>=0) { *seek_to=seek_target;break; }
+            }
+        }
+        if(ui_pressed && !(held&KEY_TOUCH)) {
             int fire=ui_pressed;ui_pressed=0;last_ui=0;
             if(fire==2)break;
             if(fire==1)toggle=1;
         }
-        if(down&KEY_B)break;
-        // Left/Right move the target by 10 s; the stream restarts there after 0.6 s
-        // without another press, so several presses become one seek.
-        if(duration>0 && started && (down&(KEY_LEFT|KEY_RIGHT))) {
+        // Buttons: Left/Right move a marker while the video keeps playing; A jumps, B cancels.
+        if(down&KEY_B) {
+            if(seek_target<0)break;
+            seek_target=-1;scrubbing=0;last_ui=0;
+        }
+        // This loop runs several times per frame, so key repeat is timed in ms:
+        // one step on press, then every 120 ms after 400 ms; 5 s steps, 15 s after 2 s held.
+        unsigned arrow=held&(KEY_LEFT|KEY_RIGHT),step=0;
+        if(down&(KEY_LEFT|KEY_RIGHT)) { arrow_since=arrow_last=now;step=1; }
+        else if(arrow && now-arrow_since>=400 && now-arrow_last>=120) { arrow_last=now;step=1; }
+        if(step && duration>0 && started && !scrubbing) {
             if(seek_target<0)seek_target=start+(int)(played_samples/RATE);
-            seek_target+=(down&KEY_RIGHT)?10:-10;
+            int amount=now-arrow_since>=2000?15:5;
+            seek_target+=(arrow&KEY_RIGHT)?amount:-amount;
             if(seek_target>duration-2)seek_target=duration-2;
             if(seek_target<0)seek_target=0;
-            seek_at=now;last_ui=0;
+            last_ui=0;
         }
-        if(seek_target>=0 && now-seek_at>=600) { *seek_to=seek_target;break; }
+        if((down&KEY_A) && seek_target>=0 && !scrubbing) { *seek_to=seek_target;break; }
         if(((down&KEY_A) || toggle) && started) {
             toggle=0;
             paused=!paused;
@@ -339,7 +360,8 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
         if(started && !paused && audio_active && !eof && audio_count<RATE*4/3) {
             audio_active=0;rebuffer=1;rebuffer_count++;
         }
-        unsigned target=started ? RATE*4*5/2 : RATE*4*3;
+        // After a seek, start with 1.5 s buffered instead of 3 s.
+        unsigned target=started ? RATE*4*5/2 : resumed ? RATE*4*3/2 : RATE*4*3;
         if(!paused && !audio_active && (audio_count>=target || (eof && audio_count))) {
             audio_active=1;rebuffer=0;
             if(!started) { started=1;mmStreamOpen(&stream); }
@@ -414,7 +436,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
     if(started)mmStreamClose();
     stop_reader=1;
     while(!reader_done)cothread_yield_irq(IRQ_VBLANK);
-    hq_video_reset();
+    if(*seek_to<0)hq_video_reset();
     if(failed && !rx_guard_word) { snprintf(error_text,error_size,"HQ stream interrupted. Check relay log.");return 0; }
     if(failed)return 0;
     return 1;

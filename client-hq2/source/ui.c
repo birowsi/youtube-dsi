@@ -648,7 +648,9 @@ void ui_player(const PlayerView *v) {
         stamp(paint, 6, 142, icon_chart, MUTED);
         text_at(paint, 25, 145, "Tap here for stream details", MUTED, 1);
     }
-    footer(v->duration > 0 ? "A: Pause   </>: 10 s   B: Back" : "A: Pause / Resume   B: Back", NULL);
+    footer(v->seek_target >= 0 ? "A: Jump here   B: Cancel" :
+           v->duration > 0 ? "A: Pause   </> or touch bar: Seek" : "A: Pause / Resume   B: Back",
+           v->seek_target >= 0 || v->duration <= 0 ? NULL : "B: Back");
     publish();
 }
 
@@ -658,5 +660,13 @@ int ui_player_hit(int x, int y) {
         if (x >= 130 && x < 252) return 2;
     }
     if (y >= 138 && y < 163) return 3;
+    if (y >= 72 && y < 96) return 4;
     return 0;
+}
+
+int ui_player_bar_seconds(int x, int duration) {
+    if (x < 8) x = 8;
+    if (x > 248) x = 248;
+    int at = (x - 8) * duration / 240;
+    return at > duration - 2 ? (duration > 2 ? duration - 2 : 0) : at;
 }

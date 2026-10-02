@@ -31,6 +31,7 @@ static char error_text[440];
 static char ids[8][12], titles[8][101];
 static uint8_t title_bitmaps[8][UI_TITLE_BYTES];
 static int results, selected, have_bitmaps;
+static int quiet;  // no status pages while reopening a stream for a seek
 static void tick(void);
 
 static volatile unsigned wifi_finished, wifi_connected, wifi_status, wifi_cancel, wifi_saved_aps;
@@ -172,7 +173,7 @@ static int connect_pc(const char *title) {
     if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) return -1;
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) { snprintf(error_text, sizeof(error_text), "socket error %d", errno); return -2; }
-    ui_status(title, "Connecting to the server...", host, "B: Cancel");
+    if (!quiet) ui_status(title, "Connecting to the server...", host, "B: Cancel");
     // libnds/lwIP socket operations yield internally while waiting.
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) { close(fd); return -1; }
     return fd;
@@ -183,7 +184,7 @@ static int open_request(const char *command, const char *title) {
     int fd = connect_pc(title);
     if (fd == -1) {
         // The PC may have a new address; look for the relay on the local network.
-        ui_status(title, "Searching for the server...", NULL, "B: Cancel");
+        if (!quiet) ui_status(title, "Searching for the server...", NULL, "B: Cancel");
         if (discover_pc()) {
             ui_top_splash(host, port);
             fd = connect_pc(title);
@@ -202,7 +203,7 @@ static int open_request(const char *command, const char *title) {
         if (n <= 0) { close(fd); snprintf(error_text, sizeof(error_text), "Send failed"); return -1; }
         done += n;
     }
-    ui_status(title, "Waiting for the server...", NULL, "B: Cancel");
+    if (!quiet) ui_status(title, "Waiting for the server...", NULL, "B: Cancel");
     int opt = 1;
     ioctl(fd, FIONBIO, &opt);
     return fd;
@@ -270,33 +271,39 @@ static int search(const char *query) {
 }
 
 static int playback(int index) {
-    int start = 0;
+    int start = 0, seeking = 0;
     while (1) {
         char command[64], line[440] = "";
         // PLAY4 carries a start position; a seek reconnects from the new position.
         if (index >= 0) snprintf(command, sizeof(command), "PLAY4 %s %d\n", ids[index], start);
         else snprintf(command, sizeof(command), "TEST3\n");
+        // A seek keeps the player on screen; only the first start shows status pages.
+        quiet = seeking;
         int fd = open_request(command, "Now Playing");
-        if (fd < 0) return 0;
-        ui_status("Now Playing", start ? "Moving to the new position..." : "Preparing the stream...",
-                  "The server is opening the video", "B: Cancel");
+        quiet = 0;
+        if (fd < 0) break;
+        if (!seeking)
+            ui_status("Now Playing", "Preparing the stream...", "The server is opening the video", "B: Cancel");
         int duration = 0, from = 0;
         if (!receive_line(fd, line, sizeof(line)) ||
             (strcmp(line, "OK STREAM") && sscanf(line, "OK STREAM4 %d %d", &duration, &from) != 2)) {
             if (line[0]) server_error(line);
-            close(fd); return 0;
+            close(fd); break;
         }
         ui_top_stop();
         int seek_to = -1;
         int ok = hq_playback(fd, error_text, sizeof(error_text),
                              index >= 0 && have_bitmaps ? title_bitmaps[index] : NULL,
                              index >= 0 ? titles[index] : "Picture + stereo test (440 Hz left, 660 Hz right)",
-                             from, duration, &seek_to);
+                             from, duration, &seek_to, seeking);
         close(fd);
-        if (ok && seek_to >= 0) { start = seek_to; continue; }
+        if (ok && seek_to >= 0) { start = seek_to; seeking = 1; continue; }
         ui_top_splash(host, port);
         return ok;
     }
+    // Could not (re)open the stream; after a seek the last picture is still up.
+    if (seeking) { hq_video_reset(); ui_top_splash(host, port); }
+    return 0;
 }
 
 // Touch press: highlight on touch-down, act on release inside the same target.
