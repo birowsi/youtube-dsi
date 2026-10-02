@@ -389,7 +389,11 @@ def resolve(video_id):
         raise ValueError('Invalid YouTube ID')
     legacy.state(state='resolving', last_video=video_id, error='')
     with legacy.yt_dlp.YoutubeDL(legacy.ydl_options(
-            format='bestvideo[height<=480][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]/best')) as ydl:
+            # Plain HTTPS files first: some videos offer 480p only as HLS, whose
+            # segments failed to open on the phone relay and seek poorly.
+            format='bestvideo[height<=480][vcodec^=avc1][protocol=https]+bestaudio[ext=m4a][protocol=https]/'
+                   'bestvideo[height<=480][vcodec^=avc1]+bestaudio[ext=m4a]/'
+                   'bestvideo[height<=480]+bestaudio/best[height<=480]/best')) as ydl:
         data = ydl.extract_info('https://www.youtube.com/watch?v='+video_id, download=False)
     streams = data.get('requested_formats') or [data]
     video = next((f for f in streams if f.get('vcodec') != 'none'), None)
