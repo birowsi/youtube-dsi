@@ -35,6 +35,7 @@ typedef struct {
     unsigned quality, picture_fps, net_kib, decode_ms, late, rebuffers, gaps;
     int pressed;                  // 1 pause, 2 back
     int show_stats;
+    int volume;                   // DSi volume 0-31, -1 unknown
 } PlayerView;
 void ui_player(const PlayerView *view);
 int ui_player_hit(int x, int y);  // 1 pause/resume, 2 back, 3 stats, 0 none

@@ -12,7 +12,7 @@ GAME_AUTHOR := hanbi
 GAME_ICON := assets/yeoltaeng.gif
 # Header: game code YTHQ, maker 00, internal title (max 12 chars).
 NDSTOOL_ARGS := -g YTHQ 00 YOUTUBEDSI2
-ARM7ELF ?= ../compat-runtime/arm7.elf
+ARM7ELF ?= ../compat-runtime/arm7-hq2.elf
 SPECS ?= ../compat-runtime/arm9-hq.specs
 DEFINES += -DCOMPAT_WIFI -DQUALITY_STREAM
 LIBS := -ldswifi9 -lmm9 -lnds9

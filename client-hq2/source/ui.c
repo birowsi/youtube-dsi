@@ -599,6 +599,12 @@ void ui_player(const PlayerView *v) {
     text_at(paint, 8, 66, line, INK, 1);
     snprintf(line, sizeof(line), "Buffer %u.%us", v->buffer_ms / 1000, (v->buffer_ms % 1000) / 100);
     text_at(paint, 248 - text_width(line), 66, line, MUTED, 1);
+    if (v->volume >= 0) {
+        // DSi speaker volume (hardware buttons), centered between time and buffer.
+        if (v->volume == 0) snprintf(line, sizeof(line), "Volume: mute");
+        else snprintf(line, sizeof(line), "Volume %d%%", (v->volume * 100 + 15) / 31);
+        text_at(paint, (256 - text_width(line)) / 2, 66, line, v->volume ? INK : WARNING, 1);
+    }
     // Buffer gauge: 0..8 s, with the 2.5 s resume point marked.
     rect(paint, 8, 82, 240, 6, CHROME); outline(paint, 8, 82, 240, 6, RULE);
     unsigned fill = v->buffer_ms > 8000 ? 8000 : v->buffer_ms;

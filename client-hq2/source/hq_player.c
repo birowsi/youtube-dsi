@@ -38,6 +38,17 @@ static char *error_text;
 static unsigned error_size;
 static int socket_fd, video_bg;
 static volatile int front_page, pending_page=-1;
+// The HQ2 ARM7 core (tools/prepare_hq2_arm7.py) answers with the DSi volume, 0-31.
+#define FIFO_VOLUME FIFO_USER_08
+static int volume_level=-1;
+static unsigned volume_asked;
+static void volume_poll(unsigned now) {
+    while(fifoCheckValue32(FIFO_VOLUME)) {
+        u32 value=fifoGetValue32(FIFO_VOLUME);
+        volume_level=value<=31?(int)value:-1;
+    }
+    if(now-volume_asked>=250) { volume_asked=now;fifoSendValue32(FIFO_VOLUME,0); }
+}
 // Retained telemetry for reproducible emulator/hardware playback checks.
 volatile uint32_t hq_stats[16];
 
@@ -218,7 +229,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
     unsigned last_ui=0,last_feedback=0,last_bytes=0,net_rate=0,tail_start=0;
     unsigned late_reported=0,decode_sum=0,decode_n=0,decode_avg=0,pictures_mark=0,picture_fps=0;
     char feedback[48];unsigned feedback_size=0,feedback_sent=0;
-    PlayerView view={.title_bitmap=title_bitmap,.title_text=title_text};
+    PlayerView view={.title_bitmap=title_bitmap,.title_text=title_text,.volume=-1};
     static int show_stats;
     int ui_mode=-1,ui_pressed=0,toggle=0;
     hq_video_reset();
@@ -227,6 +238,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
         scanKeys();unsigned now=sys_now();
         // With the lid closed, keep the sound going and skip picture decoding.
         int lid=hq_lid_update();
+        volume_poll(now);
         unsigned down=keysDown();
         int hit=0;
         if(down&KEY_TOUCH) {
@@ -302,7 +314,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             int n=send(fd,feedback+feedback_sent,feedback_size-feedback_sent,0);
             if(n>0)feedback_sent+=n;
         }
-        if(!lid && (now-last_ui>=500 || (int)mode!=ui_mode || ui_pressed!=view.pressed)) {
+        if(!lid && (now-last_ui>=500 || (int)mode!=ui_mode || ui_pressed!=view.pressed || volume_level!=view.volume)) {
             if(now-last_ui>=500 && last_ui) {
                 net_rate=(total_bytes-last_bytes)*1000/(now-last_ui)/1024;
                 last_bytes=total_bytes;
@@ -312,6 +324,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             view.quality=hq_stats[11];view.picture_fps=picture_fps;view.net_kib=net_rate;
             view.decode_ms=decode_avg;view.late=dropped;view.rebuffers=rebuffer_count;
             view.gaps=starvation_count;view.pressed=ui_pressed;view.show_stats=show_stats;
+            view.volume=volume_level;
             ui_player(&view);
         }
         hq_stats[1]=received;hq_stats[2]=played_samples;hq_stats[3]=decoded;

@@ -9,7 +9,7 @@
    서버 파일이 바뀌었기 때문이다(포트 8767 그대로). 옛 서버에 HQ2로 접속하면
    "The PC relay is the old version" 안내가 뜬다.
 2. `sd-root/YouTubeDSiHQ2.nds`(또는 `../roms/tools/`의 같은 파일)를 SD에 복사한다.
-   SHA-256 `a6476ab02ed986781a93bd092564ccdc679f902bdf27a08381e913461a83e254` (2026-10-02 5차: 서버 표기, 재생 이어받기)
+   SHA-256 `1f910872e3bdba5cf6ed063d494c0fd2da69c49999d9d5eeeb2afaa69f238a60` (2026-10-02 6차: 재생 중 멈춤 수정, 볼륨 표시)
 3. TWiLight에서 **DSi 모드, 133MHz**로 실행한다. `youtube-dsi.ini`는 그대로 쓴다.
 
 새 서버는 옛 HQ ROM의 `PLAY2/TEST2`와 Compat 서버 경로를 바꾸지 않았다(TEST2 384프레임 동일 확인).
@@ -122,3 +122,16 @@ PC 대신 집에 둔 안드로이드 폰(예: 갤럭시 S8)에서 HQ/HQ2 서버�
   재생 잠금이 남아 있었다. 이제 새 재생 요청이 이전 스트림을 바로 끊고 이어받는다(0.2초 안).
   DSi가 연결을 끊지 않고 사라진 경우에도 1초 단위로 확인해 넘겨준다.
 - 화면 문구의 "PC"를 "server"로 바꿨다. 서버는 PC든 폰이든 같은 Wi-Fi에 있으면 자동으로 찾는다.
+
+## 6차 변경 (2026-10-02)
+
+- **재생 중 멈춤 수정**: 실기에서 수십 초~1분쯤 재생하다 DSi가 멈추거나 빨간 화면(ARM9 Data abort,
+  `cothread_scheduler_start`)이 떴다. 녹화한 스트림을 에뮬레이터에 그대로 넣으면 재현되지 않아 영상 데이터 문제는
+  아니었다. 스트림 수신 스레드의 스택(24KB)에 10KB짜리 지역 버퍼가 있었고, 실기의 Wi-Fi(lwIP) 수신 경로가
+  그 위에서 더 깊게 돌면서 스택이 넘쳐 스레드 목록을 덮어쓴 것으로 판단했다.
+  버퍼를 정적 메모리로 옮기고 스택을 64KB로 늘렸다(Wi-Fi 연결 스레드도 8KB → 16KB).
+- **볼륨 표시**: 재생 화면 가운데(시간과 버퍼 사이)에 DSi 본체 볼륨을 `Volume 58%`로 보여준다. 0이면 `Volume: mute`.
+  볼륨 레지스터는 ARM7에서만 읽을 수 있어서 HQ2 전용 ARM7 코어(`compat-runtime/main7-hq2.c`,
+  `tools/prepare_hq2_arm7.py`가 생성)를 쓴다. 실기에서 확인된 HQ·Compat용 `arm7.elf`는 바꾸지 않았다.
+- 디버그용: 서버를 `YTDSI_DUMP=<폴더>`로 실행하면 보낸 스트림(.yds)과 DSi 피드백(.tsv)을 기록한다.
+  Termux에서는 `~/youtube-dsi/server/relay.env`에 `export YTDSI_DUMP=...`를 넣는다.
