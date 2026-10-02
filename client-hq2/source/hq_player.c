@@ -49,6 +49,38 @@ static void volume_poll(unsigned now) {
     }
     if(now-volume_asked>=250) { volume_asked=now;fifoSendValue32(FIFO_VOLUME,0); }
 }
+// Receiver stack: a static block painted with a pattern, so the deepest use can be
+// measured on hardware, with an untouched guard zone below it to catch an overflow.
+#define RX_STACK (64*1024)
+#define RX_GUARD 1024
+#define RX_PAINT 0xA5A5A5A5u
+static uint32_t rx_stack[(RX_GUARD+RX_STACK)/4] __attribute__((aligned(8)));
+static unsigned rx_peak, rx_guard_word;
+static uint32_t rx_guard_value;
+static void rx_stack_check(void) {
+    unsigned guard=RX_GUARD/4,i;
+    for(i=0;i<guard;i++) if(rx_stack[i]!=RX_PAINT) { rx_guard_word=i+1;rx_guard_value=rx_stack[i];break; }
+    for(i=guard;i<sizeof(rx_stack)/4 && rx_stack[i]==RX_PAINT;i++);
+    unsigned used=sizeof(rx_stack)-i*4;
+    if(used>rx_peak)rx_peak=used;
+}
+static void dump_words(uint32_t address) {
+    if(address<0x02000000 || address>=0x03000000) { printf("  (not RAM)\n");return; }
+    const uint32_t *p=(const uint32_t *)((address&~3u)-16);
+    for(int row=0;row<5;row++,p+=3)
+        printf("%08lX %08lX %08lX %08lX\n",(unsigned long)(uintptr_t)p,(unsigned long)p[0],(unsigned long)p[1],(unsigned long)p[2]);
+}
+void hq_crash_handler(void) {
+    consoleDemoInit();
+    const uint32_t *r=(const uint32_t *)exceptionRegisters;
+    printf("\x1b[41mHQ2 crash (please photograph)\n");
+    printf("pc %08lX lr %08lX\nsp %08lX\n",(unsigned long)r[15],(unsigned long)r[14],(unsigned long)r[13]);
+    for(int i=0;i<8;i+=2) printf("r%d %08lX  r%d %08lX\n",i,(unsigned long)r[i],i+1,(unsigned long)r[i+1]);
+    printf("rx stack peak %u guard %u %08lX\n",rx_peak,rx_guard_word,(unsigned long)rx_guard_value);
+    printf("r4:\n");dump_words(r[4]);
+    printf("r0:\n");dump_words(r[0]);
+    while(1);
+}
 // Retained telemetry for reproducible emulator/hardware playback checks.
 volatile uint32_t hq_stats[16];
 
@@ -207,7 +239,10 @@ static int draw_packet(VideoPacket *packet, unsigned *decode_ms) {
     return 1;
 }
 
-int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,const char *title_text) {
+int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,const char *title_text,
+                int start,int duration,int *seek_to) {
+    *seek_to=-1;
+    int seek_target=-1;unsigned seek_at=0,last_check=0;
     socket_fd=fd;error_text=error;error_size=size;
     stop_reader=reader_done=eof=failed=audio_active=0;
     received=released=audio_count=audio_out=audio_in=played_samples=0;
@@ -219,7 +254,9 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
        header[5]!=SAMPLES || header[6]!=2 || header[7]!=1 || header[8]!=1) {
         snprintf(error_text,error_size,"HQ relay/version mismatch");return 0;
     }
-    if(cothread_create(receiver,NULL,64*1024,COTHREAD_DETACHED)<0) {
+    for(unsigned i=0;i<sizeof(rx_stack)/4;i++)rx_stack[i]=RX_PAINT;
+    rx_guard_word=0;
+    if(cothread_create_manual(receiver,NULL,rx_stack+RX_GUARD/4,RX_STACK,COTHREAD_DETACHED)<0) {
         snprintf(error_text,error_size,"Can't start stream receiver");return 0;
     }
     mm_stream stream={.sampling_rate=RATE,.buffer_length=2048,.callback=fill_audio,
@@ -229,7 +266,8 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
     unsigned last_ui=0,last_feedback=0,last_bytes=0,net_rate=0,tail_start=0;
     unsigned late_reported=0,decode_sum=0,decode_n=0,decode_avg=0,pictures_mark=0,picture_fps=0;
     char feedback[48];unsigned feedback_size=0,feedback_sent=0;
-    PlayerView view={.title_bitmap=title_bitmap,.title_text=title_text,.volume=-1};
+    PlayerView view={.title_bitmap=title_bitmap,.title_text=title_text,.volume=-1,
+                     .duration=duration,.seek_target=-1,.seconds=(unsigned)start};
     static int show_stats;
     int ui_mode=-1,ui_pressed=0,toggle=0;
     hq_video_reset();
@@ -239,6 +277,14 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
         // With the lid closed, keep the sound going and skip picture decoding.
         int lid=hq_lid_update();
         volume_poll(now);
+        if(now-last_check>=500) {
+            last_check=now;rx_stack_check();
+            if(rx_guard_word) {
+                snprintf(error_text,error_size,"Receiver stack overflow: guard word %u = %08lX (peak %u bytes)",
+                         rx_guard_word,(unsigned long)rx_guard_value,rx_peak);
+                failed=1;break;
+            }
+        }
         unsigned down=keysDown();
         int hit=0;
         if(down&KEY_TOUCH) {
@@ -252,6 +298,16 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             if(fire==1)toggle=1;
         }
         if(down&KEY_B)break;
+        // Left/Right move the target by 10 s; the stream restarts there after 0.6 s
+        // without another press, so several presses become one seek.
+        if(duration>0 && started && (down&(KEY_LEFT|KEY_RIGHT))) {
+            if(seek_target<0)seek_target=start+(int)(played_samples/RATE);
+            seek_target+=(down&KEY_RIGHT)?10:-10;
+            if(seek_target>duration-2)seek_target=duration-2;
+            if(seek_target<0)seek_target=0;
+            seek_at=now;last_ui=0;
+        }
+        if(seek_target>=0 && now-seek_at>=600) { *seek_to=seek_target;break; }
         if(((down&KEY_A) || toggle) && started) {
             toggle=0;
             paused=!paused;
@@ -320,11 +376,12 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
                 last_bytes=total_bytes;
             }
             last_ui=now;ui_mode=mode;
-            view.mode=mode;view.seconds=played_samples/RATE;view.buffer_ms=buffer_ms;
+            view.mode=mode;view.seconds=start+played_samples/RATE;view.buffer_ms=buffer_ms;
+            view.duration=duration;view.seek_target=seek_target;
             view.quality=hq_stats[11];view.picture_fps=picture_fps;view.net_kib=net_rate;
             view.decode_ms=decode_avg;view.late=dropped;view.rebuffers=rebuffer_count;
             view.gaps=starvation_count;view.pressed=ui_pressed;view.show_stats=show_stats;
-            view.volume=volume_level;
+            view.volume=volume_level;view.stack_kib=(rx_peak+1023)/1024;
             ui_player(&view);
         }
         hq_stats[1]=received;hq_stats[2]=played_samples;hq_stats[3]=decoded;
@@ -340,7 +397,8 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
     stop_reader=1;
     while(!reader_done)cothread_yield_irq(IRQ_VBLANK);
     hq_video_reset();
-    if(failed) { snprintf(error_text,error_size,"HQ stream interrupted. Check relay log.");return 0; }
+    if(failed && !rx_guard_word) { snprintf(error_text,error_size,"HQ stream interrupted. Check relay log.");return 0; }
+    if(failed)return 0;
     return 1;
 }
 #endif

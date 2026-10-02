@@ -14,6 +14,10 @@ Feedback: BUF milliseconds state decode_ms late_frames_per_second [hidden].
 hidden=1 means the DSi lid is closed: only audio is needed, so no pictures are sent.
 SEARCH3 adds a 1-bit Galmuri9 title bitmap per result after the text lines.
 
+PLAY4 <id> <start_seconds> is PLAY3 from a position, for seeking. It answers
+"OK STREAM4 <duration_seconds> <start_seconds>" before the YDS3 header. The
+resolved media URLs are cached, so a seek only restarts ffmpeg.
+
 Discovery: UDP "YTDSI?<TAB>nonce" on the relay port is answered with
 "YTDSI!<TAB>port<TAB>nonce", so the DSi finds the PC after its address changes.
 """
@@ -262,7 +266,7 @@ def send_all(sock, data, stall=180):
         view, last = view[sent:], time.monotonic()
 
 
-def send_stream(sock, frames, v3=False):
+def send_stream(sock, frames, v3=False, ok=b'OK STREAM\n'):
     encoder, audio = (SmartRate() if v3 else AdaptiveJPEG()), StereoIMA()
     stop = threading.Event()
     feedback = threading.Thread(target=read_feedback, args=(sock, encoder, stop), daemon=True)
@@ -272,7 +276,7 @@ def send_stream(sock, frames, v3=False):
     feedback.start()
     # Short timeouts let send_all() notice a takeover while the DSi is not reading.
     sock.settimeout(1)
-    send_all(sock, b'OK STREAM\n' + (HEADER3 if v3 else HEADER))
+    send_all(sock, ok + (HEADER3 if v3 else HEADER))
     count, total, pictures = 0, 0, 0
     dump = trace = None
     if DUMP_DIR:
@@ -357,13 +361,30 @@ def resolve(video_id):
         raise ValueError('Video/audio not available')
     legacy.LOG.info('HQ source video=%s (%sp), audio=%s', video.get('format_id'),
                     video.get('height'), audio.get('format_id'))
+    video['_duration'] = int(data.get('duration') or 0)
     return video, audio
 
 
-def input_options(stream):
+_resolved = {}
+
+
+def resolve_cached(video_id):
+    """Media URLs stay valid for hours; reuse them so a seek starts quickly."""
+    hit = _resolved.get(video_id)
+    if hit and time.monotonic() - hit[0] < 3600:
+        return hit[1]
+    result = resolve(video_id)
+    _resolved.clear()
+    _resolved[video_id] = (time.monotonic(), result)
+    return result
+
+
+def input_options(stream, start=0):
     # Retry an interrupted public-media connection from its byte position.
+    # -ss before -i seeks the input (HTTP range request), not by decoding from 0.
     return ['-reconnect','1','-reconnect_streamed','1',
-            '-reconnect_on_network_error','1','-reconnect_delay_max','2'] + legacy.ffmpeg_input(stream)
+            '-reconnect_on_network_error','1','-reconnect_delay_max','2'] + \
+        (['-ss', str(start)] if start else []) + legacy.ffmpeg_input(stream)
 
 
 def drain_errors(pipe, tag, tails):
@@ -374,11 +395,11 @@ def drain_errors(pipe, tag, tails):
             legacy.LOG.warning('%s: %s',tag,text)
 
 
-def live_frames(video, audio):
+def live_frames(video, audio, start=0):
     base = [legacy.FFMPEG, '-hide_banner', '-nostdin', '-loglevel', 'error']
     vf = f'fps={FPS},scale={WIDTH}:{HEIGHT}:flags=lanczos:force_original_aspect_ratio=decrease,pad={WIDTH}:{HEIGHT}:(ow-iw)/2:(oh-ih)/2'
-    commands = [base+input_options(video)+['-an','-vf',vf,'-pix_fmt','rgb24','-f','rawvideo','pipe:1'],
-                base+input_options(audio)+['-vn','-ac','2','-ar',str(RATE),
+    commands = [base+input_options(video, start)+['-an','-vf',vf,'-pix_fmt','rgb24','-f','rawvideo','pipe:1'],
+                base+input_options(audio, start)+['-vn','-ac','2','-ar',str(RATE),
                     '-af',f'aresample={RATE}:filter_size=64','-f','s16le','pipe:1']]
     processes, tails = [], {}
     try:
@@ -476,7 +497,7 @@ class Handler(legacy.Handler):
                     lines.append(item['id']+'\t'+title.encode('ascii','replace').decode()[:100]+'\n')
                     bitmaps.append(title_bitmap(title))
                 self.request.sendall(''.join(lines).encode('ascii') + b''.join(bitmaps))
-            elif cmd in ('PLAY3','TEST3','PLAY2','TEST2','PLAY','TEST'):
+            elif cmd in ('PLAY4','PLAY3','TEST3','PLAY2','TEST2','PLAY','TEST'):
                 locked = legacy.PLAY_LOCK.acquire(blocking=False)
                 if not locked:
                     # One DSi plays at a time; a new request takes over from the old stream,
@@ -494,6 +515,25 @@ class Handler(legacy.Handler):
                 ACTIVE = self.request
                 if cmd == 'TEST3':
                     frames = test_frames(); send_stream(self.request, frames, v3=True)
+                elif cmd == 'PLAY4':
+                    video_id, _, start = arg.partition(' ')
+                    for attempt in range(2):
+                        video, audio = resolve_cached(video_id)
+                        duration = video['_duration']
+                        start = max(0, min(int(start or 0), max(0, duration - 2)))
+                        frames = live_frames(video, audio, start)
+                        try:
+                            first = next(frames)
+                            break
+                        except (RuntimeError, StopIteration) as exc:
+                            frames.close()
+                            if attempt or '403' not in str(exc):
+                                raise
+                            # The media URL was refused; resolve the video again once.
+                            _resolved.clear()
+                    # `frames` stays the generator so the cleanup below can close ffmpeg.
+                    send_stream(self.request, itertools.chain([first], frames), v3=True,
+                                ok=f'OK STREAM4 {duration} {start}\n'.encode())
                 elif cmd == 'PLAY3':
                     frames = live_frames(*resolve(arg)); send_stream(self.request, frames, v3=True)
                 elif cmd == 'TEST2':

@@ -270,23 +270,33 @@ static int search(const char *query) {
 }
 
 static int playback(int index) {
-    char command[64], line[440] = "";
-    if (index >= 0) snprintf(command, sizeof(command), "PLAY3 %s\n", ids[index]);
-    else snprintf(command, sizeof(command), "TEST3\n");
-    int fd = open_request(command, "Now Playing");
-    if (fd < 0) return 0;
-    ui_status("Now Playing", "Preparing the stream...", "The server is opening the video", "B: Cancel");
-    if (!receive_line(fd, line, sizeof(line)) || strcmp(line, "OK STREAM")) {
-        if (line[0]) server_error(line);
-        close(fd); return 0;
+    int start = 0;
+    while (1) {
+        char command[64], line[440] = "";
+        // PLAY4 carries a start position; a seek reconnects from the new position.
+        if (index >= 0) snprintf(command, sizeof(command), "PLAY4 %s %d\n", ids[index], start);
+        else snprintf(command, sizeof(command), "TEST3\n");
+        int fd = open_request(command, "Now Playing");
+        if (fd < 0) return 0;
+        ui_status("Now Playing", start ? "Moving to the new position..." : "Preparing the stream...",
+                  "The server is opening the video", "B: Cancel");
+        int duration = 0, from = 0;
+        if (!receive_line(fd, line, sizeof(line)) ||
+            (strcmp(line, "OK STREAM") && sscanf(line, "OK STREAM4 %d %d", &duration, &from) != 2)) {
+            if (line[0]) server_error(line);
+            close(fd); return 0;
+        }
+        ui_top_stop();
+        int seek_to = -1;
+        int ok = hq_playback(fd, error_text, sizeof(error_text),
+                             index >= 0 && have_bitmaps ? title_bitmaps[index] : NULL,
+                             index >= 0 ? titles[index] : "Picture + stereo test (440 Hz left, 660 Hz right)",
+                             from, duration, &seek_to);
+        close(fd);
+        if (ok && seek_to >= 0) { start = seek_to; continue; }
+        ui_top_splash(host, port);
+        return ok;
     }
-    ui_top_stop();
-    int ok = hq_playback(fd, error_text, sizeof(error_text),
-                         index >= 0 && have_bitmaps ? title_bitmaps[index] : NULL,
-                         index >= 0 ? titles[index] : "Picture + stereo test (440 Hz left, 660 Hz right)");
-    close(fd);
-    ui_top_splash(host, port);
-    return ok;
 }
 
 // Touch press: highlight on touch-down, act on release inside the same target.
@@ -342,7 +352,7 @@ int main(void) {
     extern char *fake_heap_end;
     fake_heap_end = (char *)0x02d00000;
 #endif
-    defaultExceptionHandler();
+    setExceptionHandler(hq_crash_handler);
     // Closing the lid turns the screens off instead of sleeping, so Wi-Fi survives.
     disableSleep();
     lcdMainOnTop();

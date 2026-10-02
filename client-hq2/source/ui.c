@@ -594,9 +594,14 @@ void ui_player(const PlayerView *v) {
         blit1(paint, 12, one_line(v->title_bitmap) ? 32 : 26, v->title_bitmap, UI_TITLE_W, UI_TITLE_H, INK);
     else if (v->title_text) text_wrap(paint, 12, 26, v->title_text, 232, 2, INK);
 
-    char line[96];
-    snprintf(line, sizeof(line), "%u:%02u", v->seconds / 60, v->seconds % 60);
-    text_at(paint, 8, 66, line, INK, 1);
+    char line[96], total[16];
+    unsigned shown = v->seek_target >= 0 ? (unsigned)v->seek_target : v->seconds;
+    snprintf(line, sizeof(line), "%u:%02u", shown / 60, shown % 60);
+    if (v->duration > 0) {
+        snprintf(total, sizeof(total), " / %d:%02d", v->duration / 60, v->duration % 60);
+        strncat(line, total, sizeof(line) - strlen(line) - 1);
+    }
+    text_at(paint, 8, 66, line, v->seek_target >= 0 ? ACCENT : INK, 1);
     snprintf(line, sizeof(line), "Buffer %u.%us", v->buffer_ms / 1000, (v->buffer_ms % 1000) / 100);
     text_at(paint, 248 - text_width(line), 66, line, MUTED, 1);
     if (v->volume >= 0) {
@@ -605,11 +610,22 @@ void ui_player(const PlayerView *v) {
         else snprintf(line, sizeof(line), "Volume %d%%", (v->volume * 100 + 15) / 31);
         text_at(paint, (256 - text_width(line)) / 2, 66, line, v->volume ? INK : WARNING, 1);
     }
-    // Buffer gauge: 0..8 s, with the 2.5 s resume point marked.
-    rect(paint, 8, 82, 240, 6, CHROME); outline(paint, 8, 82, 240, 6, RULE);
-    unsigned fill = v->buffer_ms > 8000 ? 8000 : v->buffer_ms;
-    rect(paint, 9, 83, (int)(fill * 238 / 8000), 4, v->mode == 2 ? WARNING : ACCENT);
-    rect(paint, 8 + 2500 * 240 / 8000, 80, 1, 10, MUTED);
+    if (v->duration > 0) {
+        // Position in the video; while choosing a seek, the target is marked.
+        rect(paint, 8, 82, 240, 6, CHROME); outline(paint, 8, 82, 240, 6, RULE);
+        unsigned at = v->seconds > (unsigned)v->duration ? (unsigned)v->duration : v->seconds;
+        rect(paint, 9, 83, (int)(at * 238 / (unsigned)v->duration), 4, v->mode == 2 ? WARNING : ACCENT);
+        if (v->seek_target >= 0) {
+            int x = 8 + v->seek_target * 239 / v->duration;
+            rect(paint, x - 1, 79, 3, 12, INK);
+        }
+    } else {
+        // Buffer gauge: 0..8 s, with the 2.5 s resume point marked.
+        rect(paint, 8, 82, 240, 6, CHROME); outline(paint, 8, 82, 240, 6, RULE);
+        unsigned fill = v->buffer_ms > 8000 ? 8000 : v->buffer_ms;
+        rect(paint, 9, 83, (int)(fill * 238 / 8000), 4, v->mode == 2 ? WARNING : ACCENT);
+        rect(paint, 8 + 2500 * 240 / 8000, 80, 1, 10, MUTED);
+    }
 
     icon_button(4, 96, 122, 40, v->mode == 3 ? icon_play_solid : icon_pause,
                 v->mode == 3 ? "Resume" : "Pause", v->pressed == 1, INK);
@@ -619,14 +635,14 @@ void ui_player(const PlayerView *v) {
         snprintf(line, sizeof(line), "Picture %u fps   Quality %u   Wi-Fi %u KB/s",
                  v->picture_fps, v->quality, v->net_kib);
         text_at(paint, 7, 141, line, MUTED, 1);
-        snprintf(line, sizeof(line), "Decode %u ms   Late %u   Wait %u   Gaps %u",
-                 v->decode_ms, v->late, v->rebuffers, v->gaps);
+        snprintf(line, sizeof(line), "Decode %u ms  Late %u  Wait %u  Gaps %u  Stack %uK",
+                 v->decode_ms, v->late, v->rebuffers, v->gaps, v->stack_kib);
         text_at(paint, 7, 152, line, v->late || v->gaps ? WARNING : MUTED, 1);
     } else {
         stamp(paint, 6, 142, icon_chart, MUTED);
         text_at(paint, 25, 145, "Tap here for stream details", MUTED, 1);
     }
-    footer("A: Pause / Resume   B: Back", NULL);
+    footer(v->duration > 0 ? "A: Pause   </>: 10 s   B: Back" : "A: Pause / Resume   B: Back", NULL);
     publish();
 }
 

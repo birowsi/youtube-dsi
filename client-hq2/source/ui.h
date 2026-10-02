@@ -32,10 +32,12 @@ typedef struct {
     const char *title_text;
     int mode;                     // 0 starting, 1 playing, 2 buffering, 3 paused
     unsigned seconds, buffer_ms;
-    unsigned quality, picture_fps, net_kib, decode_ms, late, rebuffers, gaps;
+    unsigned quality, picture_fps, net_kib, decode_ms, late, rebuffers, gaps, stack_kib;
     int pressed;                  // 1 pause, 2 back
     int show_stats;
     int volume;                   // DSi volume 0-31, -1 unknown
+    int duration;                 // seconds; 0 unknown (no position bar)
+    int seek_target;              // seconds, while Left/Right is choosing; -1 none
 } PlayerView;
 void ui_player(const PlayerView *view);
 int ui_player_hit(int x, int y);  // 1 pause/resume, 2 back, 3 stats, 0 none
