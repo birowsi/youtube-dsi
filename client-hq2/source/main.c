@@ -172,7 +172,7 @@ static int connect_pc(const char *title) {
     if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) return -1;
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) { snprintf(error_text, sizeof(error_text), "socket error %d", errno); return -2; }
-    ui_status(title, "Connecting to the PC...", host, "B: Cancel");
+    ui_status(title, "Connecting to the server...", host, "B: Cancel");
     // libnds/lwIP socket operations yield internally while waiting.
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) { close(fd); return -1; }
     return fd;
@@ -183,7 +183,7 @@ static int open_request(const char *command, const char *title) {
     int fd = connect_pc(title);
     if (fd == -1) {
         // The PC may have a new address; look for the relay on the local network.
-        ui_status(title, "Searching for the PC...", NULL, "B: Cancel");
+        ui_status(title, "Searching for the server...", NULL, "B: Cancel");
         if (discover_pc()) {
             ui_top_splash(host, port);
             fd = connect_pc(title);
@@ -192,7 +192,7 @@ static int open_request(const char *command, const char *title) {
     if (fd < 0) {
         if (fd == -1)
             snprintf(error_text, sizeof(error_text),
-                     "Can't reach %s:%d. Check that start-quality-server.cmd is running and the firewall allows it.",
+                     "Can't reach the server at %s:%d. Check that it is running on the same Wi-Fi.",
                      host, port);
         return -1;
     }
@@ -202,7 +202,7 @@ static int open_request(const char *command, const char *title) {
         if (n <= 0) { close(fd); snprintf(error_text, sizeof(error_text), "Send failed"); return -1; }
         done += n;
     }
-    ui_status(title, "Waiting for the PC...", NULL, "B: Cancel");
+    ui_status(title, "Waiting for the server...", NULL, "B: Cancel");
     int opt = 1;
     ioctl(fd, FIONBIO, &opt);
     return fd;
@@ -213,13 +213,13 @@ static int receive_bytes(int fd, void *data, unsigned size) {
     while (used < size) {
         int n = recv(fd, (uint8_t *)data + used, size - used, 0);
         if (n > 0) { used += n; idle = 0; continue; }
-        if (n == 0) { snprintf(error_text, sizeof(error_text), "The PC closed the connection."); return 0; }
+        if (n == 0) { snprintf(error_text, sizeof(error_text), "The server closed the connection."); return 0; }
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
             snprintf(error_text, sizeof(error_text), "Receive failed: %d", errno); return 0;
         }
         tick();
         if (keysDown() & KEY_B) { snprintf(error_text, sizeof(error_text), "Cancelled"); return 0; }
-        if (++idle > 180 * 60) { snprintf(error_text, sizeof(error_text), "The PC did not answer."); return 0; }
+        if (++idle > 180 * 60) { snprintf(error_text, sizeof(error_text), "The server did not answer."); return 0; }
     }
     return 1;
 }
@@ -235,7 +235,7 @@ static int receive_line(int fd, char *line, unsigned size) {
 static void server_error(const char *line) {
     if (!strncmp(line, "ERR Unknown command", 19))
         snprintf(error_text, sizeof(error_text),
-                 "The PC relay is the old version. Close it and run start-quality-server.cmd again.");
+                 "The server is an old version. Update it and start it again.");
     else snprintf(error_text, sizeof(error_text), "%.430s", line[0] ? line : "Request failed");
 }
 
@@ -275,7 +275,7 @@ static int playback(int index) {
     else snprintf(command, sizeof(command), "TEST3\n");
     int fd = open_request(command, "Now Playing");
     if (fd < 0) return 0;
-    ui_status("Now Playing", "Preparing the stream...", "The PC is opening the video", "B: Cancel");
+    ui_status("Now Playing", "Preparing the stream...", "The server is opening the video", "B: Cancel");
     if (!receive_line(fd, line, sizeof(line)) || strcmp(line, "OK STREAM")) {
         if (line[0]) server_error(line);
         close(fd); return 0;
@@ -364,7 +364,7 @@ int main(void) {
                  "connection: Open or WEP networks.", wifi_status, wifi_saved_aps);
         show_error(); return 1;
     }
-    ui_status("YouTube DSi", "Starting...", "Looking for the PC", NULL);
+    ui_status("YouTube DSi", "Starting...", "Looking for the server", NULL);
     if (discover_pc()) ui_top_splash(host, port);
     ui_status("YouTube DSi", "Starting...", "Sound", NULL);
     mm_ds_system sys = {.mod_count=0, .samp_count=0, .mem_bank=0, .fifo_channel=FIFO_MAXMOD};
@@ -382,7 +382,7 @@ int main(void) {
         if (action == 3) {
             char edit[64];
             snprintf(edit, sizeof(edit), "%s", host);
-            if (ui_keyboard("PC address (IPv4)", edit, sizeof(edit), tick, 0)) {
+            if (ui_keyboard("Server address (IPv4)", edit, sizeof(edit), tick, 0)) {
                 snprintf(host, sizeof(host), "%s", edit);
                 ui_top_splash(host, port);
             }

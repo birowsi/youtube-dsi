@@ -246,7 +246,7 @@ void ui_top_splash(const char *host, int port) {
     const char *name = "YouTube DSi HQ2";
     text_at(TOP, (W - text_width(name)) / 2, 167, name, INK, 1);
     char line[64];
-    snprintf(line, sizeof(line), "PC %s:%d", host, port);
+    snprintf(line, sizeof(line), "Server %s:%d", host, port);
     text_at(TOP, (W - text_width(line)) / 2, 179, line, MUTED, 1);
     splash_frame = 0; splash_clock = 0; splash_active = 1;
     splash_draw_frame();
@@ -289,13 +289,13 @@ void ui_home(const char *host, int port, int pressed) {
     stamp(paint, 18 + shift, 34 + shift, icon_search, MUTED);
     text_at(paint, 40 + shift, 37 + shift, "Search YouTube", MUTED, 1);
     icon_button(8, 70, 116, 40, icon_note, "Test", pressed == 2, INK);
-    icon_button(132, 70, 116, 40, icon_pc, "PC address", pressed == 3, INK);
+    icon_button(132, 70, 116, 40, icon_pc, "Server", pressed == 3, INK);
     rect(paint, 8, 120, 240, 34, PAPER); outline(paint, 8, 120, 240, 34, RULE);
     char line[64];
-    snprintf(line, sizeof(line), "PC  %s:%d", host, port);
+    snprintf(line, sizeof(line), "Server  %s:%d", host, port);
     text_at(paint, 16, 125, line, INK, 1);
-    text_at(paint, 16, 139, "Run start-quality-server.cmd on the PC", MUTED, 1);
-    footer("A: Search   X: Test   Y: PC address", "START: Exit");
+    text_at(paint, 16, 139, "Found automatically on the same Wi-Fi", MUTED, 1);
+    footer("A: Search   X: Test   Y: Server", "START: Exit");
     publish();
 }
 

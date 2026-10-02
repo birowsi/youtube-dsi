@@ -45,6 +45,9 @@ HEADER3 = struct.pack('<4s8I', b'YDS3', WIDTH, HEIGHT, FPS, RATE, SAMPLES, 2, 1,
 TITLE_W, TITLE_H = 232, 22
 FONT_PATH = Path(__file__).resolve().parent / 'fonts' / 'Galmuri9.ttf'
 TEST_STALL_MS = 0
+# Set by a new PLAY request so the stream still holding PLAY_LOCK ends at once.
+REPLACE = threading.Event()
+ACTIVE = None   # socket of the stream holding PLAY_LOCK
 
 
 class StereoIMA:
@@ -241,6 +244,21 @@ def read_feedback(sock, controller, stop):
             return
 
 
+def send_all(sock, data, stall=180):
+    """sendall() that gives up when a new request replaces this stream."""
+    view, last = memoryview(data), time.monotonic()
+    while view:
+        if REPLACE.is_set():
+            raise ConnectionAbortedError('Stream replaced by a new request')
+        try:
+            sent = sock.send(view)
+        except socket.timeout:
+            if time.monotonic() - last > stall:
+                raise
+            continue
+        view, last = view[sent:], time.monotonic()
+
+
 def send_stream(sock, frames, v3=False):
     encoder, audio = (SmartRate() if v3 else AdaptiveJPEG()), StereoIMA()
     stop = threading.Event()
@@ -249,14 +267,19 @@ def send_stream(sock, frames, v3=False):
     if first is None:
         raise RuntimeError('No complete video/audio packet produced')
     feedback.start()
-    sock.sendall(b'OK STREAM\n' + (HEADER3 if v3 else HEADER))
+    # Short timeouts let send_all() notice a takeover while the DSi is not reading.
+    sock.settimeout(1)
+    send_all(sock, b'OK STREAM\n' + (HEADER3 if v3 else HEADER))
     count, total, pictures = 0, 0, 0
     try:
         for image, pcm in itertools.chain([first], frames):
+            if REPLACE.is_set():
+                legacy.LOG.info('Stream replaced by a new request')
+                return
             jpeg, q = encoder.encode(image)
             block = audio.encode(pcm)
             packet = struct.pack('<4I', count, len(jpeg), len(block), q) + jpeg + block
-            sock.sendall(packet)
+            send_all(sock, packet)
             count += 1
             total += len(packet)
             pictures += bool(jpeg)
@@ -274,7 +297,9 @@ def send_stream(sock, frames, v3=False):
         # End the AV direction but keep feedback open until the DSi drains its
         # buffered tail. This avoids writing into an already closed connection.
         sock.shutdown(socket.SHUT_WR)
-        feedback.join(timeout=180)
+        deadline = time.monotonic() + 180
+        while feedback.is_alive() and time.monotonic() < deadline and not REPLACE.wait(.2):
+            pass
     finally:
         stop.set()
         feedback.join(timeout=1)
@@ -407,6 +432,7 @@ def title_bitmap(title):
 
 class Handler(legacy.Handler):
     def handle(self):
+        global ACTIVE
         locked = False
         frames = None
         try:
@@ -437,7 +463,19 @@ class Handler(legacy.Handler):
             elif cmd in ('PLAY3','TEST3','PLAY2','TEST2','PLAY','TEST'):
                 locked = legacy.PLAY_LOCK.acquire(blocking=False)
                 if not locked:
-                    raise ValueError('Another client is playing. Stop it first.')
+                    # One DSi plays at a time; a new request takes over from the old stream,
+                    # which may still be closing its ffmpeg processes after the DSi left.
+                    REPLACE.set()
+                    try:
+                        # Unblock a sendall() to a DSi that left without closing the connection.
+                        ACTIVE.shutdown(socket.SHUT_RDWR)
+                    except (AttributeError, OSError):
+                        pass
+                    locked = legacy.PLAY_LOCK.acquire(timeout=15)
+                    if not locked:
+                        raise ValueError('The previous video is still closing. Try again.')
+                REPLACE.clear()
+                ACTIVE = self.request
                 if cmd == 'TEST3':
                     frames = test_frames(); send_stream(self.request, frames, v3=True)
                 elif cmd == 'PLAY3':
