@@ -76,7 +76,7 @@ static int connect_saved_wifi(void) {
 }
 
 // lwIP runs in a cooperative thread; BIOS waits alone starve network work.
-static void tick(void) { cothread_yield_irq(IRQ_VBLANK); scanKeys(); hq_lid_update(); ui_top_tick(); }
+static void tick(void) { cothread_yield_irq(IRQ_VBLANK); scanKeys(); hq_lid_update(); hq_status_poll(); ui_top_tick(); }
 
 static void wait_a(void) {
     do { tick(); } while (!(keysDown() & (KEY_A | KEY_TOUCH)));

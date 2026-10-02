@@ -57,14 +57,27 @@ void vblank_handler(void)
 #endif
 }
 
-// HQ2: the ARM9 asks for the DSi volume; reply 0-31, or 0xFF outside DSi mode.
-// Runs in the FIFO handler, the same context libnds uses for its battery I2C reads.
+// HQ2: cached DSi volume/battery for the ARM9 (see tools/prepare_hq2_arm7.py).
 #define FIFO_VOLUME FIFO_USER_08
+static volatile u32 hq2_status;
+
 static void volume_request(u32 value, void *userdata)
 {
     (void)value;
     (void)userdata;
-    fifoSendValue32(FIFO_VOLUME, isDSiMode() ? i2cReadRegister(I2C_PM, I2CREGPM_VOL) : 0xFF);
+    fifoSendValue32(FIFO_VOLUME, hq2_status);
+}
+
+static void hq2_refresh_status(void)
+{
+    if (!isDSiMode())
+        return;
+    // I2C transactions must not interleave; libnds does its own in IRQ handlers.
+    int ime = enterCriticalSection();
+    u32 volume = i2cReadRegister(I2C_PM, I2CREGPM_VOL) & 0xFF;
+    u32 battery = getBatteryLevel() & 0xFF;
+    leaveCriticalSection(ime);
+    hq2_status = volume | (battery << 8) | (1u << 16);
 }
 
 int main(void)
@@ -142,6 +155,13 @@ int main(void)
             exit_loop = true;
 
         swiWaitForVBlank();
+
+        // Heartbeat for the ARM9 watchdog: IPC sync output bits 8-11.
+        static u32 beat;
+        beat++;
+        REG_IPC_SYNC = (REG_IPC_SYNC & IPC_SYNC_IRQ_ENABLE) | ((beat & 0xF) << 8);
+        if (beat % 60 == 1)
+            hq2_refresh_status();
     }
 
     return 0;

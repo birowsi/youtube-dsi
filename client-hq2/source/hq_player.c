@@ -42,13 +42,21 @@ static volatile int front_page, pending_page=-1;
 #define FIFO_VOLUME FIFO_USER_08
 static int volume_level=-1;
 static unsigned volume_asked;
+// The answer carries the DSi volume (bits 0-7) and battery (bits 8-15) the ARM7 read
+// in its main loop. Nothing waits for it: a blocking getBatteryLevel() in the UI was
+// where playback hung once the ARM7/FIFO stalled.
+u32 hq_battery_raw=0xFFFFFFFFu;
 static void volume_poll(unsigned now) {
     while(fifoCheckValue32(FIFO_VOLUME)) {
         u32 value=fifoGetValue32(FIFO_VOLUME);
-        volume_level=value<=31?(int)value:-1;
+        if(value&(1u<<16)) {
+            volume_level=(value&0xFF)<=31?(int)(value&0xFF):-1;
+            hq_battery_raw=(value>>8)&0xFF;
+        }
     }
-    if(now-volume_asked>=250) { volume_asked=now;fifoSendValue32(FIFO_VOLUME,0); }
+    if(now-volume_asked>=500) { volume_asked=now;fifoSendValue32(FIFO_VOLUME,0); }
 }
+void hq_status_poll(void) { volume_poll(sys_now()); }
 // Receiver stack: a static block painted with a pattern, so the deepest use can be
 // measured on hardware, with an untouched guard zone below it to catch an overflow.
 #define RX_STACK (64*1024)
@@ -69,18 +77,20 @@ static void rx_stack_check(void) {
 static volatile unsigned main_beat, main_phase, rx_beat, rx_phase, rx_sub;
 static volatile int watch_on;
 static cothread_t rx_thread;
-static unsigned watch_last, watch_count, watch_stage;
+static unsigned watch_last, watch_count, watch_stage, arm7_beat_first;
 static unsigned snap[12];
 static void watchdog_report(int arm7_answered) {
-    static char lines[10][48];
-    const char *list[10];
+    static char lines[12][48];
+    const char *list[12];
     int n=0;
     snprintf(lines[n++],48,"HQ2 stalled - please photograph");
-    snprintf(lines[n++],48,"main phase %u beat %u battery %u",snap[0],snap[1],snap[2]);
+    snprintf(lines[n++],48,"main phase %u beat %u",snap[0],snap[1]);
     snprintf(lines[n++],48,"rx phase %u.%u beat %u",snap[3],snap[4],snap[5]);
     snprintf(lines[n++],48,"received %u released %u",snap[6],snap[7]);
     snprintf(lines[n++],48,"audio %u active %u eof %u fail %u",snap[8],snap[9],snap[10],snap[11]);
     snprintf(lines[n++],48,"ARM7 answers: %s",arm7_answered<0?"checking...":arm7_answered?"yes":"NO");
+    if(arm7_answered>=0)
+        snprintf(lines[n++],48,"ARM7 main loop: %s",(REG_IPC_SYNC&15)!=arm7_beat_first?"running":"STOPPED");
     snprintf(lines[n++],48,"rx stack peak %u",rx_peak);
     snprintf(lines[n++],48,"net stacks %u %u %u (%d)",hq_net_stack_peak(0),hq_net_stack_peak(1),
              hq_net_stack_peak(2),hq_net_stack_count());
@@ -94,8 +104,8 @@ static void watchdog(void) {
     if(main_beat!=watch_last) { watch_last=main_beat;watch_count=0;watch_stage=0;return; }
     watch_count++;
     if(watch_count==180) {
-        extern volatile int ui_battery_wait;
-        unsigned values[12]={main_phase,main_beat,(unsigned)ui_battery_wait,rx_phase,rx_sub,rx_beat,
+        arm7_beat_first=REG_IPC_SYNC&15;
+        unsigned values[12]={main_phase,main_beat,0,rx_phase,rx_sub,rx_beat,
                              received,released,audio_count,audio_active,eof,failed};
         memcpy(snap,values,sizeof(snap));
         // Ask the ARM7 something it answers from its FIFO handler (the volume).
