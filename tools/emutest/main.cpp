@@ -129,6 +129,7 @@ int main(int argc,char** argv) {
                     if(cmd=="touch") { int x,y;s>>x>>y;nds->TouchScreen(x,y); }
                     if(cmd=="release") { nds->ReleaseScreen();nds->SetKeyMask(0xFFF); }
                     if(cmd=="capture") { std::string n;s>>n;capture(*nds,out+"/"+n+".bgra"); }
+                    if(cmd=="lid") { int closed;s>>closed;nds->SetLidClosed(closed!=0); }
                     if(cmd=="quit") i=frames;
                 }
             }

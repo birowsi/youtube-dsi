@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <time.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/socket.h>
@@ -24,7 +25,7 @@
 #error "HQ2 is a DSi-mode quality build"
 #endif
 
-static char host[64] = "192.168.0.4";
+static char host[64] = "192.168.0.4", ini_host[64];
 static int port = 8767;
 static char error_text[440];
 static char ids[8][12], titles[8][101];
@@ -74,7 +75,7 @@ static int connect_saved_wifi(void) {
 }
 
 // lwIP runs in a cooperative thread; BIOS waits alone starve network work.
-static void tick(void) { cothread_yield_irq(IRQ_VBLANK); scanKeys(); ui_top_tick(); }
+static void tick(void) { cothread_yield_irq(IRQ_VBLANK); scanKeys(); hq_lid_update(); ui_top_tick(); }
 
 static void wait_a(void) {
     do { tick(); } while (!(keysDown() & (KEY_A | KEY_TOUCH)));
@@ -99,25 +100,101 @@ static void load_config(void) {
         if (sscanf(line, "quality_port=%d", &number) == 1 && number > 0 && number < 65536) port = number;
     }
     fclose(file);
+    snprintf(ini_host, sizeof(ini_host), "%s", host);
+    // A PC address found by discovery is reused while the INI host is unchanged.
+    file = fopen("/youtube-dsi.cache", "r");
+    if (!file) return;
+    char cached_ini[64] = "", cached_host[64] = "";
+    while (fgets(line, sizeof(line), file)) {
+        sscanf(line, "ini_host=%63s", cached_ini);
+        sscanf(line, "host=%63s", cached_host);
+    }
+    fclose(file);
+    if (cached_host[0] && !strcmp(cached_ini, ini_host)) snprintf(host, sizeof(host), "%s", cached_host);
+}
+
+static void save_found_host(void) {
+    FILE *file = fopen("/youtube-dsi.cache", "w");
+    if (!file) return;
+    fprintf(file, "ini_host=%s\nhost=%s\n", ini_host, host);
+    fclose(file);
+}
+
+// Broadcast "YTDSI?" to the quality relay port; the relay answers with its port and our nonce.
+static int discover_pc(void) {
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0) return 0;
+    int yes = 1;
+    setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
+    int nonblock = 1;
+    ioctl(fd, FIONBIO, &nonblock);
+    struct sockaddr_in local = {0};
+    local.sin_family = AF_INET;
+    bind(fd, (struct sockaddr *)&local, sizeof(local));
+    struct in_addr gateway, mask, dns1, dns2, ip = Wifi_GetIPInfo(&gateway, &mask, &dns1, &dns2);
+    static unsigned counter;
+    char nonce[20], probe[48];
+    snprintf(nonce, sizeof(nonce), "%08x%08x", (unsigned)time(NULL) ^ (unsigned)ip.s_addr, ++counter * 2654435761u);
+    snprintf(probe, sizeof(probe), "YTDSI?\t%s\n", nonce);
+    uint32_t targets[2] = {ip.s_addr | ~mask.s_addr, INADDR_BROADCAST};
+    int found = 0;
+    for (int attempt = 0; attempt < 3 && !found; attempt++) {
+        for (int i = 0; i < 2; i++) {
+            struct sockaddr_in to = {0};
+            to.sin_family = AF_INET;
+            to.sin_port = htons(port);
+            to.sin_addr.s_addr = targets[i];
+            sendto(fd, probe, strlen(probe), 0, (struct sockaddr *)&to, sizeof(to));
+        }
+        for (unsigned frames = 0; frames < 30 && !found; frames++) {
+            char reply[96], echoed[20];
+            struct sockaddr_in from;
+            socklen_t size = sizeof(from);
+            int found_port, n = recvfrom(fd, reply, sizeof(reply) - 1, 0, (struct sockaddr *)&from, &size);
+            if (n <= 0) { tick(); continue; }
+            reply[n] = 0;
+            if (sscanf(reply, "YTDSI!\t%d\t%19s", &found_port, echoed) == 2 && !strcmp(echoed, nonce) &&
+                found_port > 0 && found_port < 65536 && inet_ntop(AF_INET, &from.sin_addr, host, sizeof(host))) {
+                port = found_port;
+                found = 1;
+            }
+        }
+    }
+    close(fd);
+    if (found && strcmp(host, ini_host)) save_found_host();
+    return found;
+}
+
+static int connect_pc(const char *title) {
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) return -1;
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) { snprintf(error_text, sizeof(error_text), "socket error %d", errno); return -2; }
+    ui_status(title, "Connecting to the PC...", host, "B: Cancel");
+    // libnds/lwIP socket operations yield internally while waiting.
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) { close(fd); return -1; }
+    return fd;
 }
 
 static int open_request(const char *command, const char *title) {
     error_text[0] = 0;
-    struct sockaddr_in addr = {0};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        snprintf(error_text, sizeof(error_text), "Enter an IPv4 address for the PC."); return -1;
+    int fd = connect_pc(title);
+    if (fd == -1) {
+        // The PC may have a new address; look for the relay on the local network.
+        ui_status(title, "Searching for the PC...", NULL, "B: Cancel");
+        if (discover_pc()) {
+            ui_top_splash(host, port);
+            fd = connect_pc(title);
+        }
     }
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) { snprintf(error_text, sizeof(error_text), "socket error %d", errno); return -1; }
-    ui_status(title, "Connecting to the PC...", host, "B: Cancel");
-    // libnds/lwIP socket operations yield internally while waiting.
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        snprintf(error_text, sizeof(error_text),
-                 "Can't reach %s:%d. Check that start-quality-server.cmd is running and the firewall allows it.",
-                 host, port);
-        close(fd); return -1;
+    if (fd < 0) {
+        if (fd == -1)
+            snprintf(error_text, sizeof(error_text),
+                     "Can't reach %s:%d. Check that start-quality-server.cmd is running and the firewall allows it.",
+                     host, port);
+        return -1;
     }
     unsigned length = strlen(command), done = 0;
     while (done < length) {
@@ -266,6 +343,8 @@ int main(void) {
     fake_heap_end = (char *)0x02d00000;
 #endif
     defaultExceptionHandler();
+    // Closing the lid turns the screens off instead of sleeping, so Wi-Fi survives.
+    disableSleep();
     lcdMainOnTop();
     setBrightness(3, 0);
     ui_init();
@@ -285,6 +364,8 @@ int main(void) {
                  "connection: Open or WEP networks.", wifi_status, wifi_saved_aps);
         show_error(); return 1;
     }
+    ui_status("YouTube DSi", "Starting...", "Looking for the PC", NULL);
+    if (discover_pc()) ui_top_splash(host, port);
     ui_status("YouTube DSi", "Starting...", "Sound", NULL);
     mm_ds_system sys = {.mod_count=0, .samp_count=0, .mem_bank=0, .fifo_channel=FIFO_MAXMOD};
     if (!mmInit(&sys)) { snprintf(error_text, sizeof(error_text), "Audio init failed"); show_error(); return 1; }
@@ -319,5 +400,7 @@ int main(void) {
         if (action) ui_home(host, port, 0);
     }
     Wifi_DisconnectAP(); Wifi_DisableWifi();
+    powerOn(PM_BACKLIGHT_TOP | PM_BACKLIGHT_BOTTOM);
+    enableSleep();
     return 0;
 }

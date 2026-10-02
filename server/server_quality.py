@@ -10,8 +10,12 @@ YDS3 (PLAY3/TEST3, 2026-10-02) keeps the YDS2 packet layout. A packet whose
 jpeg_length is 0 repeats the previous picture. The relay keeps the picture
 quality steady and lowers the picture rate when a scene does not fit the
 measured Wi-Fi rate, instead of squeezing every frame into a small JPEG.
-Feedback: BUF milliseconds state decode_ms late_frames_per_second.
+Feedback: BUF milliseconds state decode_ms late_frames_per_second [hidden].
+hidden=1 means the DSi lid is closed: only audio is needed, so no pictures are sent.
 SEARCH3 adds a 1-bit Galmuri9 title bitmap per result after the text lines.
+
+Discovery: UDP "YTDSI?<TAB>nonce" on the relay port is answered with
+"YTDSI!<TAB>port<TAB>nonce", so the DSi finds the PC after its address changes.
 """
 from __future__ import annotations
 import argparse
@@ -19,6 +23,7 @@ import collections
 from pathlib import Path
 import audioop
 import io
+import ipaddress
 import itertools
 import logging
 import math
@@ -68,7 +73,7 @@ class AdaptiveJPEG:
         self.feedback = (3000, 0, 0)
         self.lock = threading.Lock()
 
-    def update(self, ms, mode, decode_ms=0):
+    def update(self, ms, mode, decode_ms=0, *unused):
         with self.lock:
             self.feedback = (ms, mode, decode_ms)
 
@@ -131,13 +136,17 @@ class SmartRate:
         self.window = collections.deque(maxlen=FPS * 2)
         self.window_bytes = collections.deque(maxlen=FPS * 2)
         self.last_adjust = time.monotonic()
-        self.feedback = (0, 0, 0, 0)
+        self.feedback = (0, 0, 0, 0, 0)
         self.lock = threading.Lock()
         self.budget = 0              # status compatibility
 
-    def update(self, ms, mode, decode_ms=0, late=0):
+    def update(self, ms, mode, decode_ms=0, late=0, hidden=0):
         with self.lock:
-            self.feedback = (ms, mode, decode_ms, late)
+            self.feedback = (ms, mode, decode_ms, late, hidden)
+
+    def hidden(self):
+        with self.lock:
+            return bool(self.feedback[4])
 
     def adjust(self):
         now = time.monotonic()
@@ -145,7 +154,9 @@ class SmartRate:
             return
         self.last_adjust = now
         with self.lock:
-            ms, mode, decode_ms, late = self.feedback
+            ms, mode, decode_ms, late, hidden = self.feedback
+        if hidden:
+            return                       # no pictures: nothing to learn about Wi-Fi or decoding
         if mode == 2 or (mode == 1 and ms < 2000):
             self.rate *= 0.85
         elif (mode == 1 and ms >= 4500 and late <= 1 and
@@ -168,6 +179,9 @@ class SmartRate:
     def encode(self, image):
         self.adjust()
         self.tokens = min(self.tokens + self.rate / FPS, self.rate * 0.6)
+        if not self.first and self.hidden():
+            self.gap = 0
+            return b'', self.q
         data, q = save_jpeg(image, self.q), self.q
         if self.first or len(data) <= self.tokens:
             pass
@@ -218,7 +232,7 @@ def read_feedback(sock, controller, stop):
             while b'\n' in pending:
                 line, pending = pending.split(b'\n', 1)
                 words = line.split()
-                if len(words) in (3,4,5) and words[0] == b'BUF':
+                if len(words) in (3,4,5,6) and words[0] == b'BUF':
                     ms, mode = int(words[1]), int(words[2])
                     if 0 <= ms <= 10000 and 0 <= mode <= 3:
                         extra = [int(w) for w in words[3:]]
@@ -456,10 +470,24 @@ class Handler(legacy.Handler):
                 legacy.state(state='ready')
 
 
+def discovery(sock, port):
+    """Answer DSi broadcast probes on the relay port (UDP)."""
+    while True:
+        data, addr = sock.recvfrom(256)
+        try:
+            kind, nonce = data.decode('ascii').strip().split('\t')
+            address = ipaddress.ip_address(addr[0])
+        except (UnicodeError, ValueError):
+            continue
+        if kind == 'YTDSI?' and legacy.re.fullmatch(r'[0-9a-f]{1,19}', nonce) and (
+                address.is_private or address.is_loopback):
+            sock.sendto(f'YTDSI!\t{port}\t{nonce}\n'.encode(), addr)
+
+
 def main():
     global TEST_STALL_MS
     parser = argparse.ArgumentParser()
-    parser.add_argument('--bind', default='192.168.0.4')
+    parser.add_argument('--bind', default='0.0.0.0')
     parser.add_argument('--port', type=int, default=8767)
     parser.add_argument('--ffmpeg', default='C:/ffmpeg/bin/ffmpeg.exe')
     parser.add_argument('--test-stall-ms', type=int, default=0)
@@ -469,6 +497,13 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
     status = ThreadingHTTPServer(('127.0.0.1', args.port+1), legacy.StatusHandler)
     threading.Thread(target=status.serve_forever, daemon=True).start()
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.bind((args.bind, args.port))
+        threading.Thread(target=discovery, args=(probe, args.port), daemon=True).start()
+        legacy.LOG.info('DSi auto-discovery on UDP %s:%d', args.bind, args.port)
+    except OSError as exc:
+        legacy.LOG.warning('Auto-discovery unavailable: %s', exc)
     legacy.LOG.info('HQ relay TCP %s:%d, status port%d', args.bind, args.port, args.port+1)
     with legacy.Server((args.bind, args.port), Handler) as server:
         try:

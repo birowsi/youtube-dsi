@@ -41,6 +41,16 @@ static volatile int front_page, pending_page=-1;
 // Retained telemetry for reproducible emulator/hardware playback checks.
 volatile uint32_t hq_stats[16];
 
+int hq_lid_update(void) {
+    static int closed;
+    int lid=(keysHeld()&KEY_LID)!=0;
+    if(lid!=closed) {
+        closed=lid;
+        if(lid)powerOff(PM_BACKLIGHT_TOP|PM_BACKLIGHT_BOTTOM);
+        else powerOn(PM_BACKLIGHT_TOP|PM_BACKLIGHT_BOTTOM);
+    }
+    return closed;
+}
 void hq_video_reset(void) {
     pending_page=-1;
     dmaFillHalfWords(0x8000, (void*)0x06000000, 384*1024);
@@ -213,6 +223,8 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
     while(1) {
         int drew=0;
         scanKeys();unsigned now=sys_now();
+        // With the lid closed, keep the sound going and skip picture decoding.
+        int lid=hq_lid_update();
         unsigned down=keysDown();
         int hit=0;
         if(down&KEY_TOUCH) {
@@ -249,7 +261,9 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
                 played_samples-stream.buffer_length : 0)/SAMPLES;
             if(eof && !audio_count)current=received-1;
             if(current>=received)current=received-1;
-            if(current!=shown) {
+            if(current!=shown && lid) {
+                shown=current;released=current+1;
+            } else if(current!=shown) {
                 // Newest real picture at or before `current`; 0-byte packets repeat.
                 unsigned target=current;
                 while(target!=shown && target && !packets[target%SLOTS].length)target--;
@@ -277,14 +291,16 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             unsigned late=dropped-late_reported;late_reported=dropped;
             picture_fps=last_feedback ? (decoded-pictures_mark)*1000/(now-last_feedback) : 0;
             pictures_mark=decoded;decode_sum=decode_n=0;
-            feedback_size=snprintf(feedback,sizeof(feedback),"BUF %u %u %u %u\n",buffer_ms,mode,decode_avg,late);
+            // A trailing 1 asks the relay to stop sending pictures while the lid is closed.
+            feedback_size=snprintf(feedback,sizeof(feedback),lid?"BUF %u %u %u %u 1\n":"BUF %u %u %u %u\n",
+                                   buffer_ms,mode,decode_avg,late);
             feedback_sent=0;last_feedback=now;
         }
         if(!eof && feedback_sent<feedback_size) {
             int n=send(fd,feedback+feedback_sent,feedback_size-feedback_sent,0);
             if(n>0)feedback_sent+=n;
         }
-        if(now-last_ui>=500 || (int)mode!=ui_mode || ui_pressed!=view.pressed) {
+        if(!lid && (now-last_ui>=500 || (int)mode!=ui_mode || ui_pressed!=view.pressed)) {
             if(now-last_ui>=500 && last_ui) {
                 net_rate=(total_bytes-last_bytes)*1000/(now-last_ui)/1024;
                 last_bytes=total_bytes;
