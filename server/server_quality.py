@@ -153,6 +153,7 @@ class SmartRate:
     def update(self, ms, mode, decode_ms=0, late=0, hidden=0):
         with self.lock:
             self.feedback = (ms, mode, decode_ms, late, hidden)
+            self.feedback_at = time.monotonic()
 
     def hidden(self):
         with self.lock:
@@ -266,6 +267,39 @@ def send_all(sock, data, stall=180):
         view, last = view[sent:], time.monotonic()
 
 
+class Pacer:
+    """Keep the DSi buffer under its 6 s capacity so its receiver never stops reading.
+
+    With the buffer full the DSi stops calling recv(), its TCP window closes and
+    packets queue up inside its network stack. On real Wi-Fi (retransmissions,
+    out-of-order segments) that is where playback crashed after a minute or two;
+    the emulator's lossless network never reached that state. The DSi reports its
+    buffer once a second; between reports the level is estimated from what was
+    sent since and how long it has been playing.
+    """
+    AHEAD = 4.5          # seconds of audio buffered on the DSi
+
+    def __init__(self):
+        self.seen = None
+        self.base_count = 0
+
+    def wait(self, encoder, count):
+        while not REPLACE.is_set():
+            with encoder.lock:
+                ms, mode = encoder.feedback[0], encoder.feedback[1]
+                stamp = getattr(encoder, 'feedback_at', None)
+            if stamp is None or mode not in (1, 3):
+                return             # starting up or rebuffering: send freely
+            if stamp != self.seen:
+                self.seen, self.base_count = stamp, count
+            buffered = ms / 1000 + (count - self.base_count) / FPS
+            if mode == 1:
+                buffered -= time.monotonic() - stamp
+            if buffered < self.AHEAD:
+                return
+            time.sleep(0.03)
+
+
 def send_stream(sock, frames, v3=False, ok=b'OK STREAM\n'):
     encoder, audio = (SmartRate() if v3 else AdaptiveJPEG()), StereoIMA()
     stop = threading.Event()
@@ -278,6 +312,7 @@ def send_stream(sock, frames, v3=False, ok=b'OK STREAM\n'):
     sock.settimeout(1)
     send_all(sock, ok + (HEADER3 if v3 else HEADER))
     count, total, pictures = 0, 0, 0
+    pacer = Pacer()
     dump = trace = None
     if DUMP_DIR:
         name = os.path.join(DUMP_DIR, time.strftime('%Y%m%d-%H%M%S'))
@@ -289,6 +324,8 @@ def send_stream(sock, frames, v3=False, ok=b'OK STREAM\n'):
             if REPLACE.is_set():
                 legacy.LOG.info('Stream replaced by a new request')
                 return
+            if v3:
+                pacer.wait(encoder, count)
             jpeg, q = encoder.encode(image)
             block = audio.encode(pcm)
             packet = struct.pack('<4I', count, len(jpeg), len(block), q) + jpeg + block
