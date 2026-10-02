@@ -423,8 +423,11 @@ def resolve_cached(video_id):
 def input_options(stream, start=0):
     # Retry an interrupted public-media connection from its byte position.
     # -ss before -i seeks the input (HTTP range request), not by decoding from 0.
+    # -short_seek_size 1: always seek with a new range request. YouTube sends at about
+    # playback speed, so reading ahead to a point 30 s in took 15 s instead of 1 s.
     return ['-reconnect','1','-reconnect_streamed','1',
-            '-reconnect_on_network_error','1','-reconnect_delay_max','2'] + \
+            '-reconnect_on_network_error','1','-reconnect_delay_max','2',
+            '-short_seek_size','1'] + \
         (['-ss', str(start)] if start else []) + legacy.ffmpeg_input(stream)
 
 
@@ -598,7 +601,9 @@ class Handler(legacy.Handler):
                 pass
         finally:
             if frames is not None:
-                frames.close()
+                # Stopping ffmpeg can take seconds; do it in the background so a seek's
+                # new stream (waiting for PLAY_LOCK) starts at once.
+                threading.Thread(target=frames.close, daemon=True).start()
             if locked:
                 legacy.PLAY_LOCK.release()
             if legacy.STATUS['state'] != 'error':
