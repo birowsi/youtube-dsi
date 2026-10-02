@@ -35,6 +35,7 @@ typedef struct {
     int mode;                     // 0 starting, 1 playing, 2 buffering, 3 paused
     unsigned seconds, buffer_ms;
     unsigned quality, picture_fps, net_kib, decode_ms, late, rebuffers, gaps, stack_kib;
+    unsigned net_stack_kib[2];    // DSWiFi update thread, lwIP tcpip thread
     int pressed;                  // 1 pause, 2 back
     int show_stats;
     int volume;                   // DSi volume 0-31, -1 unknown

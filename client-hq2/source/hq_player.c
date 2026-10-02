@@ -68,6 +68,7 @@ static void rx_stack_check(void) {
 // A hang with interrupts alive (sound fades to silence) shows where each thread was.
 static volatile unsigned main_beat, main_phase, rx_beat, rx_phase, rx_sub;
 static volatile int watch_on;
+static cothread_t rx_thread;
 static unsigned watch_last, watch_count, watch_stage;
 static unsigned snap[12];
 static void watchdog_report(int arm7_answered) {
@@ -81,6 +82,10 @@ static void watchdog_report(int arm7_answered) {
     snprintf(lines[n++],48,"audio %u active %u eof %u fail %u",snap[8],snap[9],snap[10],snap[11]);
     snprintf(lines[n++],48,"ARM7 answers: %s",arm7_answered<0?"checking...":arm7_answered?"yes":"NO");
     snprintf(lines[n++],48,"rx stack peak %u",rx_peak);
+    snprintf(lines[n++],48,"net stacks %u %u %u (%d)",hq_net_stack_peak(0),hq_net_stack_peak(1),
+             hq_net_stack_peak(2),hq_net_stack_count());
+    snprintf(lines[n++],48,"threads %08X %08X",(unsigned)hq_thread_id(0),(unsigned)hq_thread_id(1));
+    snprintf(lines[n++],48,"        %08X rx %08X",(unsigned)hq_thread_id(2),(unsigned)rx_thread);
     for(int i=0;i<n;i++)list[i]=lines[i];
     ui_crash(list,n);
 }
@@ -128,6 +133,8 @@ void hq_crash_handler(void) {
         snprintf(crash_lines[crash_count++],48,"r%d-%d %08lX %08lX %08lX %08lX",i,i+3,
                  (unsigned long)r[i],(unsigned long)r[i+1],(unsigned long)r[i+2],(unsigned long)r[i+3]);
     snprintf(crash_lines[crash_count++],48,"rx peak %u guard %u %08lX",rx_peak,rx_guard_word,(unsigned long)rx_guard_value);
+    snprintf(crash_lines[crash_count++],48,"net stacks %u %u %u (%d)",hq_net_stack_peak(0),hq_net_stack_peak(1),
+             hq_net_stack_peak(2),hq_net_stack_count());
     crash_dump("r4",r[4]);
     crash_dump("r0",r[0]);
     const char *lines[17];
@@ -323,7 +330,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
     }
     for(unsigned i=0;i<sizeof(rx_stack)/4;i++)rx_stack[i]=RX_PAINT;
     rx_guard_word=0;
-    if(cothread_create_manual(receiver,NULL,rx_stack+RX_GUARD/4,RX_STACK,COTHREAD_DETACHED)<0) {
+    if((rx_thread=cothread_create_manual(receiver,NULL,rx_stack+RX_GUARD/4,RX_STACK,COTHREAD_DETACHED))<0) {
         snprintf(error_text,error_size,"Can't start stream receiver");return 0;
     }
     mm_stream stream={.sampling_rate=RATE,.buffer_length=2048,.callback=fill_audio,
@@ -480,6 +487,9 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             view.decode_ms=decode_avg;view.late=dropped;view.rebuffers=rebuffer_count;
             view.gaps=starvation_count;view.pressed=ui_pressed;view.show_stats=show_stats;
             view.volume=volume_level;view.stack_kib=(rx_peak+1023)/1024;
+            // Tracked threads: 0 Wi-Fi connect (ended), 1 DSWiFi update, 2 lwIP tcpip.
+            if(view.show_stats)
+                for(int i=0;i<2;i++)view.net_stack_kib[i]=(hq_net_stack_peak(i+1)+1023)/1024;
             main_phase=5;
             ui_player(&view);
         }

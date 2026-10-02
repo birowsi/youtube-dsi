@@ -644,8 +644,9 @@ void ui_player(const PlayerView *v) {
         snprintf(line, sizeof(line), "Picture %u fps   Quality %u   Wi-Fi %u KB/s",
                  v->picture_fps, v->quality, v->net_kib);
         text_at(paint, 7, 141, line, MUTED, 1);
-        snprintf(line, sizeof(line), "Decode %u ms  Late %u  Wait %u  Gaps %u  Stack %uK",
-                 v->decode_ms, v->late, v->rebuffers, v->gaps, v->stack_kib);
+        snprintf(line, sizeof(line), "Dec %ums  Late %u  Wait %u  Gaps %u  Stk %u/%u/%uK",
+                 v->decode_ms, v->late, v->rebuffers, v->gaps, v->stack_kib,
+                 v->net_stack_kib[0], v->net_stack_kib[1]);
         text_at(paint, 7, 152, line, v->late || v->gaps ? WARNING : MUTED, 1);
     } else {
         stamp(paint, 6, 142, icon_chart, MUTED);
