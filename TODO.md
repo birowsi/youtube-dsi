@@ -13,10 +13,11 @@
 
 - [ ] 진단 기능(오류 화면, 워치독, 스택 측정, 감시 영역, 블랙박스)은 장시간 재생이 몇 번 더 확인되면 정리.
   서버 스트림 녹화 `YTDSI_DUMP`는 S8에서 껐다.
-- [ ] DSWiFi 버그 상류 제보(초안: 로컬 `investigation/upstream-dswifi-issues.md`, git 제외 폴더).
 
 ## 해결됨
 
 - [x] 진행 바 터치 이동: 실기에서 동작 확인(2026-10-03).
 - [x] 최근 검색어: 실기 SD 카드에 저장되고 다시 켜도 남아 있음(2026-10-04).
+- [x] DSWiFi 버그 상류 제보: [blocksds/sdk#401](https://codeberg.org/blocksds/sdk/issues/401)(`Wifi_Update()` 재진입),
+  [blocksds/sdk#402](https://codeberg.org/blocksds/sdk/issues/402)(`sys_arch_sem_wait()` 타임아웃). 고쳐지면 우회 코드를 뺄 수 있다.
 - [x] **장시간 재생 멈춤**: DSWiFi ARM7 `Wifi_Update()` 재진입이 원인(`HQ2-GUIDE.md` 9차 변경, 릴리스 `hq2-20261003`).
