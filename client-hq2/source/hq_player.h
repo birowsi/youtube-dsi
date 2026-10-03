@@ -7,6 +7,9 @@ void hq_video_reset(void);
 int hq_lid_update(void);
 // Fetches the ARM7's cached DSi volume/battery without waiting; call every frame.
 void hq_status_poll(void);
+// Watchdog phases for the caller's part of leaving playback; hq_watch_end() after close().
+void hq_watch_phase(unsigned phase);
+void hq_watch_end(void);
 extern u32 hq_battery_raw;   // getBatteryLevel() value from the ARM7, 0xFFFFFFFF unknown
 // Crash screen that never dereferences the crashed stack; shows memory around r0/r4.
 void hq_crash_handler(void);

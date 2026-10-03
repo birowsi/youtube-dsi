@@ -1,6 +1,7 @@
 #ifdef QUALITY_STREAM
 #include <nds.h>
 #include <maxmod9.h>
+#include <dswifi9.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -84,6 +85,8 @@ static void rx_stack_check(void) {
 static volatile unsigned main_beat, main_phase, rx_beat, rx_phase, rx_sub;
 static volatile int watch_on;
 static cothread_t rx_thread;
+void hq_watch_phase(unsigned phase) { main_phase=phase; }
+void hq_watch_end(void) { watch_on=0; }
 static unsigned watch_last, watch_count, watch_stage, arm7_beat_first;
 static unsigned snap[12];
 static void watchdog_report(int arm7_answered) {
@@ -210,14 +213,14 @@ static int read_exact(void *destination,unsigned size) {
         if(n>0) { done+=n;total_bytes+=n;last=sys_now();continue; }
         if(!n)return done ? -1 : 0;
         if(errno!=EAGAIN && errno!=EWOULDBLOCK)return -1;
-        fd_set readable;FD_ZERO(&readable);FD_SET(socket_fd,&readable);
-        struct timeval timeout={.tv_sec=0,.tv_usec=100000};
-        // A semaphore-based socket wait wakes on packets, not just VBlank.
+        // Not select(): DSWiFi's timed semaphore wait only checks the timeout after
+        // the socket signals, so with no data it never returned (B then hung) and a
+        // missed wake-up could leave data unread. The ARM7 sends a FIFO message for
+        // every received packet and at least once per frame, so wake on those.
         rx_sub=2;
-        int ready=select(socket_fd+1,&readable,NULL,NULL,&timeout);
+        cothread_yield_irq(IRQ_RECV_FIFO);
         rx_sub=3;
-        if(ready<0 && errno!=EINTR)return -1;
-        if(sys_now()-last>30000)return -1;
+        if(sys_now()-last>15000)return -1;
     }
     return done==size ? 1 : -1;
 }
@@ -337,6 +340,8 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
                 int start,int duration,int *seek_to,int resumed) {
     *seek_to=-1;
     int seek_target=-1,scrubbing=0;unsigned last_check=0;
+    static char stall_text[96];
+    unsigned stall_bytes=0,stall_since=sys_now();
     unsigned arrow_since=0,arrow_last=0;
     socket_fd=fd;error_text=error;error_size=size;
     stop_reader=reader_done=eof=failed=audio_active=0;
@@ -380,8 +385,18 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
 #ifdef HQ2_HANG_TEST
         if(keysDown()&KEY_SELECT)for(;;);   // emulator check of the watchdog
 #endif
+        if(total_bytes!=stall_bytes) { stall_bytes=total_bytes;stall_since=now; }
         if(now-last_check>=500) {
             last_check=now;rx_stack_check();
+            // No data for 5 s while playing: show the Wi-Fi state and counters on screen.
+            if(started && !paused && !eof && now-stall_since>=5000) {
+                int assoc=Wifi_AssocStatus();
+                snprintf(stall_text,sizeof(stall_text),"No data %us  Wi-Fi %s  rx %lu tx %lu lost %lu rej %lu",
+                         (now-stall_since)/1000,assoc>=0 && assoc<=ASSOCSTATUS_CANNOTCONNECT?ASSOCSTATUS_STRINGS[assoc]:"?",
+                         (unsigned long)Wifi_GetStats(WSTAT_RXPACKETS),(unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
+                         (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED));
+                view.notice=stall_text;last_ui=0;
+            } else if(view.notice) { view.notice=NULL;last_ui=0; }
             unsigned canary_first=0;uint32_t canary_value=0;
             unsigned canary_bad=hq_canary_check(&canary_first,&canary_value);
             if(canary_bad) {
@@ -499,10 +514,12 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             // Flight recorder (diagnostic): the relay logs this line, so the second before
             // a hang is on record even when the DSi can no longer show anything.
             feedback_size+=snprintf(feedback+feedback_size,sizeof(feedback)-feedback_size,
-                "DBG a7 %lu fifo %04X main %u/%u rx %u.%u/%u got %u rel %u aud %u st %u/%u/%u cn %u wd %08lX mr %u\n",
+                "DBG a7 %lu fifo %04X main %u/%u rx %u.%u/%u got %u rel %u aud %u st %u/%u/%u cn %u wd %08lX mr %u wifi %d rx %lu tx %lu lost %lu rej %lu\n",
                 (unsigned long)arm7_beat_read(),(unsigned)REG_IPC_FIFO_CR,main_phase,main_beat,rx_phase,rx_sub,rx_beat,
                 received,released,audio_count,hq_net_stack_peak(1),hq_net_stack_peak(2),rx_peak,
-                hq_canary_check(&(unsigned){0},&(uint32_t){0}),(unsigned long)hq_canary_owner(),macread_rejected);
+                hq_canary_check(&(unsigned){0},&(uint32_t){0}),(unsigned long)hq_canary_owner(),macread_rejected,
+                Wifi_AssocStatus(),(unsigned long)Wifi_GetStats(WSTAT_RXPACKETS),(unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
+                (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED));
             feedback_sent=0;last_feedback=now;
         }
         if(!eof && feedback_sent<feedback_size) {
@@ -537,11 +554,15 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
         if(drew || (started && !paused && audio_active))cothread_yield();
         else cothread_yield_irq(IRQ_VBLANK);
     }
-    watch_on=0;
+    // The watchdog stays on until the caller has closed the socket (hq_watch_end):
+    // a hang while leaving playback shows which step it was.
     audio_active=0;
+    main_phase=10;
     if(started)mmStreamClose();
     stop_reader=1;
+    main_phase=11;
     while(!reader_done)cothread_yield_irq(IRQ_VBLANK);
+    main_phase=12;
     if(*seek_to<0)hq_video_reset();
     if(failed && !rx_guard_word) { snprintf(error_text,error_size,"HQ stream interrupted. Check relay log.");return 0; }
     if(failed)return 0;

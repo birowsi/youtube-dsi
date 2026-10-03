@@ -649,8 +649,12 @@ void ui_player(const PlayerView *v) {
                  v->net_stack_kib[0], v->net_stack_kib[1]);
         text_at(paint, 7, 152, line, v->late || v->gaps ? WARNING : MUTED, 1);
     } else {
-        stamp(paint, 6, 142, icon_chart, MUTED);
-        text_at(paint, 25, 145, "Tap here for stream details", MUTED, 1);
+        if (v->notice) {
+            text_wrap(paint, 7, 141, v->notice, 242, 2, WARNING);
+        } else {
+            stamp(paint, 6, 142, icon_chart, MUTED);
+            text_at(paint, 25, 145, "Tap here for stream details", MUTED, 1);
+        }
     }
     footer(v->seek_target >= 0 ? "A: Jump here   B: Cancel" :
            v->duration > 0 ? "A: Pause   </> or touch bar: Seek" : "A: Pause / Resume   B: Back",

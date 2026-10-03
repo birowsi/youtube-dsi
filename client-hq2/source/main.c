@@ -296,7 +296,9 @@ static int playback(int index) {
                              index >= 0 && have_bitmaps ? title_bitmaps[index] : NULL,
                              index >= 0 ? titles[index] : "Picture + stereo test (440 Hz left, 660 Hz right)",
                              from, duration, &seek_to, seeking);
+        hq_watch_phase(13);
         close(fd);
+        hq_watch_end();
         if (ok && seek_to >= 0) { start = seek_to; seeking = 1; continue; }
         ui_top_splash(host, port);
         return ok;

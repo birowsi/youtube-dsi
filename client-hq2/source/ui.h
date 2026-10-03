@@ -41,6 +41,7 @@ typedef struct {
     int volume;                   // DSi volume 0-31, -1 unknown
     int duration;                 // seconds; 0 unknown (no position bar)
     int seek_target;              // seconds, while Left/Right is choosing; -1 none
+    const char *notice;           // warning line (e.g. network stalled), or NULL
 } PlayerView;
 void ui_player(const PlayerView *view);
 int ui_player_hit(int x, int y);  // 1 pause/resume, 2 back, 3 stats, 4 position bar, 0 none
