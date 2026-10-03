@@ -196,6 +196,32 @@ static int connect_pc(const char *title) {
     return fd;
 }
 
+// The DSi's whole network sometimes stops during long playback (no ping, no new
+// connection) while the ARM7 still runs. Dropping the association and joining the
+// access point again brings it back; the stream then resumes where it stopped.
+static unsigned wifi_resets;
+static char wifi_before_reset[120];
+static int reconnect_wifi(void) {
+    int assoc = Wifi_AssocStatus();
+    snprintf(wifi_before_reset, sizeof(wifi_before_reset), "Wi-Fi was %s, rx %lu tx %lu lost %lu rej %lu",
+             assoc >= 0 && assoc <= ASSOCSTATUS_CANNOTCONNECT ? ASSOCSTATUS_STRINGS[assoc] : "?",
+             (unsigned long)Wifi_GetStats(WSTAT_RXPACKETS), (unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
+             (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST), (unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED));
+    wifi_resets++;
+    hq_wifi_resets = wifi_resets;
+    ui_status("Now Playing", "Reconnecting Wi-Fi...", wifi_before_reset, NULL);
+    Wifi_DisconnectAP();
+    for (unsigned frames = 0; frames < 60; frames++) tick();
+    Wifi_AutoConnect();
+    for (unsigned frames = 0; frames < 25 * 60; frames++) {
+        int status = Wifi_AssocStatus();
+        if (status == ASSOCSTATUS_ASSOCIATED) return 1;
+        if (status == ASSOCSTATUS_CANNOTCONNECT) return 0;
+        tick();
+    }
+    return 0;
+}
+
 static int open_request(const char *command, const char *title) {
     error_text[0] = 0;
     int fd = connect_pc(title);
@@ -297,8 +323,15 @@ static int playback(int index) {
         // A seek keeps the player on screen; only the first start shows status pages.
         quiet = seeking;
         int fd = open_request(command, "Now Playing");
+        if (fd < 0 && hq_resumed_after_stall && reconnect_wifi())
+            fd = open_request(command, "Now Playing");
         quiet = 0;
-        if (fd < 0) break;
+        if (fd < 0) {
+            if (hq_resumed_after_stall && wifi_before_reset[0])
+                snprintf(error_text, sizeof(error_text), "The network stopped and did not come back. %s.",
+                         wifi_before_reset);
+            break;
+        }
         if (!seeking)
             ui_status("Now Playing", "Preparing the stream...", "The server is opening the video", "B: Cancel");
         int duration = 0, from = 0;

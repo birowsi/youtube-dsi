@@ -87,6 +87,7 @@ static volatile int watch_on;
 static cothread_t rx_thread;
 void hq_watch_phase(unsigned phase) { main_phase=phase; }
 int hq_auto_resume=1, hq_resumed_after_stall;
+unsigned hq_wifi_resets;
 void hq_watch_end(void) { watch_on=0; }
 static unsigned watch_last, watch_count, watch_stage, arm7_beat_first;
 static unsigned snap[12];
@@ -521,12 +522,13 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             // Flight recorder (diagnostic): the relay logs this line, so the second before
             // a hang is on record even when the DSi can no longer show anything.
             feedback_size+=snprintf(feedback+feedback_size,sizeof(feedback)-feedback_size,
-                "DBG a7 %lu fifo %04X main %u/%u rx %u.%u/%u got %u rel %u aud %u st %u/%u/%u cn %u wd %08lX mr %u wifi %d rx %lu tx %lu lost %lu rej %lu\n",
+                "DBG a7 %lu fifo %04X main %u/%u rx %u.%u/%u got %u rel %u aud %u st %u/%u/%u cn %u wd %08lX mr %u wifi %d rx %lu tx %lu lost %lu rej %lu resets %u\n",
                 (unsigned long)arm7_beat_read(),(unsigned)REG_IPC_FIFO_CR,main_phase,main_beat,rx_phase,rx_sub,rx_beat,
                 received,released,audio_count,hq_net_stack_peak(1),hq_net_stack_peak(2),rx_peak,
                 hq_canary_check(&(unsigned){0},&(uint32_t){0}),(unsigned long)hq_canary_owner(),macread_rejected,
                 Wifi_AssocStatus(),(unsigned long)Wifi_GetStats(WSTAT_RXPACKETS),(unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
-                (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED));
+                (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED),
+                hq_wifi_resets);
             feedback_sent=0;last_feedback=now;
         }
         if(!eof && feedback_sent<feedback_size) {

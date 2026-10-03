@@ -13,6 +13,7 @@ void hq_watch_end(void);
 // Auto-resume: when set, a stream that gets no data for 8 s returns with *seek_to at
 // the current position and hq_resumed_after_stall=1, so the caller reconnects.
 extern int hq_auto_resume, hq_resumed_after_stall;
+extern unsigned hq_wifi_resets;   // Wi-Fi rejoins after the network stopped (flight recorder)
 extern u32 hq_battery_raw;   // getBatteryLevel() value from the ARM7, 0xFFFFFFFF unknown
 // Crash screen that never dereferences the crashed stack; shows memory around r0/r4.
 void hq_crash_handler(void);
