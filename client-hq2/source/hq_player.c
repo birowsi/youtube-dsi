@@ -97,6 +97,8 @@ static void watchdog_report(int arm7_answered) {
     if(arm7_answered>=0)
         snprintf(lines[n++],48,"ARM7 main loop: %s",arm7_beat_read()!=arm7_beat_first?"running":"STOPPED");
     snprintf(lines[n++],48,"rx stack peak %u",rx_peak);
+    { unsigned f=0;uint32_t v=0;unsigned bad=hq_canary_check(&f,&v);
+      snprintf(lines[n++],48,"canary %u +%u=%08lX",bad,f*4,(unsigned long)v); }
     snprintf(lines[n++],48,"net stacks %u %u %u (%d)",hq_net_stack_peak(0),hq_net_stack_peak(1),
              hq_net_stack_peak(2),hq_net_stack_count());
     snprintf(lines[n++],48,"threads %08X %08X",(unsigned)hq_thread_id(0),(unsigned)hq_thread_id(1));
@@ -148,6 +150,8 @@ void hq_crash_handler(void) {
         snprintf(crash_lines[crash_count++],48,"r%d-%d %08lX %08lX %08lX %08lX",i,i+3,
                  (unsigned long)r[i],(unsigned long)r[i+1],(unsigned long)r[i+2],(unsigned long)r[i+3]);
     snprintf(crash_lines[crash_count++],48,"rx peak %u guard %u %08lX",rx_peak,rx_guard_word,(unsigned long)rx_guard_value);
+    { unsigned f=0;uint32_t v=0;unsigned bad=hq_canary_check(&f,&v);
+      snprintf(crash_lines[crash_count++],48,"canary %u +%u=%08lX wd %08lX",bad,f*4,(unsigned long)v,(unsigned long)hq_canary_owner()); }
     snprintf(crash_lines[crash_count++],48,"net stacks %u %u %u (%d)",hq_net_stack_peak(0),hq_net_stack_peak(1),
              hq_net_stack_peak(2),hq_net_stack_count());
     crash_dump("r4",r[4]);
@@ -376,6 +380,13 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
 #endif
         if(now-last_check>=500) {
             last_check=now;rx_stack_check();
+            unsigned canary_first=0;uint32_t canary_value=0;
+            unsigned canary_bad=hq_canary_check(&canary_first,&canary_value);
+            if(canary_bad) {
+                snprintf(error_text,error_size,"Memory written past the Wi-Fi buffer (%08lX): %u words, first +%u = %08lX",
+                         (unsigned long)hq_canary_owner(),canary_bad,canary_first*4,(unsigned long)canary_value);
+                failed=1;break;
+            }
             if(rx_guard_word) {
                 snprintf(error_text,error_size,"Receiver stack overflow: guard word %u = %08lX (peak %u bytes)",
                          rx_guard_word,(unsigned long)rx_guard_value,rx_peak);
@@ -486,9 +497,10 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             // Flight recorder (diagnostic): the relay logs this line, so the second before
             // a hang is on record even when the DSi can no longer show anything.
             feedback_size+=snprintf(feedback+feedback_size,sizeof(feedback)-feedback_size,
-                "DBG a7 %lu fifo %04X main %u/%u rx %u.%u/%u got %u rel %u aud %u st %u/%u/%u\n",
+                "DBG a7 %lu fifo %04X main %u/%u rx %u.%u/%u got %u rel %u aud %u st %u/%u/%u cn %u wd %08lX\n",
                 (unsigned long)arm7_beat_read(),(unsigned)REG_IPC_FIFO_CR,main_phase,main_beat,rx_phase,rx_sub,rx_beat,
-                received,released,audio_count,hq_net_stack_peak(1),hq_net_stack_peak(2),rx_peak);
+                received,released,audio_count,hq_net_stack_peak(1),hq_net_stack_peak(2),rx_peak,
+                hq_canary_check(&(unsigned){0},&(uint32_t){0}),(unsigned long)hq_canary_owner());
             feedback_sent=0;last_feedback=now;
         }
         if(!eof && feedback_sent<feedback_size) {

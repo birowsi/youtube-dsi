@@ -14,6 +14,9 @@ void hq_crash_handler(void);
 int hq_net_stack_count(void);
 unsigned hq_net_stack_peak(int index);
 cothread_t hq_thread_id(int index);
+// Canary after DSWiFi's shared struct (net_stacks.c).
+unsigned hq_canary_check(unsigned *first, uint32_t *value);
+uintptr_t hq_canary_owner(void);
 // start/duration in seconds (duration 0: unknown, no seeking). Returns 1 with
 // *seek_to >= 0 when the user picked a new position on the bar. `resumed` marks a
 // stream reopened by a seek: the last picture stays up and playback starts sooner.

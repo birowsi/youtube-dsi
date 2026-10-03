@@ -17,6 +17,6 @@ SPECS ?= ../compat-runtime/arm9-hq.specs
 DEFINES += -DCOMPAT_WIFI -DQUALITY_STREAM
 LIBS := -ldswifi9 -lmm9 -lnds9
 # Every cothread (including DSWiFi's lwIP threads) gets a 32 KB stack: source/net_stacks.c
-LDFLAGS := -Wl,--wrap=cothread_create
+LDFLAGS := -Wl,--wrap=cothread_create -Wl,--wrap=aligned_alloc
 LIBDIRS := $(BLOCKSDS)/libs/dswifi $(BLOCKSDS)/libs/maxmod
 include $(BLOCKSDS)/sys/default_makefiles/rom_arm9/Makefile

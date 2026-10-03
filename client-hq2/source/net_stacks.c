@@ -58,6 +58,48 @@ cothread_t __wrap_cothread_create(cothread_entrypoint_t entrypoint, void *arg,
     return thread;
 }
 
+// Canary after large aligned allocations (DSWiFi's shared Wifi_MainStruct is the only
+// one): hardware crashes zeroed more than 33 KB of the heap right after that struct,
+// so an 8 KB painted zone there shows whether something writes past its end, and what.
+#define CANARY_BYTES (8 * 1024)
+#define CANARY 0x5A5A5A5Au
+static uint32_t *canary;
+static void *canary_owner;
+
+void *__real_aligned_alloc(size_t alignment, size_t size);
+
+void *__wrap_aligned_alloc(size_t alignment, size_t size)
+{
+    if (size < 16 * 1024 || canary != NULL)
+        return __real_aligned_alloc(alignment, size);
+    size_t body = (size + 31) & ~(size_t)31;
+    uint8_t *block = __real_aligned_alloc(alignment, body + CANARY_BYTES);
+    if (block == NULL)
+        return NULL;
+    canary = (uint32_t *)(block + body);
+    canary_owner = block;
+    for (unsigned i = 0; i < CANARY_BYTES / 4; i++)
+        canary[i] = CANARY;
+    return block;
+}
+
+uintptr_t hq_canary_owner(void) { return (uintptr_t)canary_owner; }
+
+// Number of damaged canary words; the first damaged word index and value.
+unsigned hq_canary_check(unsigned *first, uint32_t *value)
+{
+    unsigned damaged = 0;
+    if (canary == NULL)
+        return 0;
+    for (unsigned i = 0; i < CANARY_BYTES / 4; i++) {
+        if (canary[i] != CANARY) {
+            if (!damaged) { *first = i; *value = canary[i]; }
+            damaged++;
+        }
+    }
+    return damaged;
+}
+
 int hq_net_stack_count(void) { return tracked_count; }
 
 // Deepest use of tracked stack i, in bytes.
