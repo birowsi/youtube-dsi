@@ -1,4 +1,8 @@
-# HQ2 장시간 재생 오류 인수인계 (2026-10-03)
+# HQ2 장시간 재생 오류 조사 기록
+
+> **해결됨 (2026-10-03).** 원인은 DSWiFi ARM7 `Wifi_Update()` 재진입이었다(아래 표 13번,
+> [HQ2-CHANGELOG.md](HQ2-CHANGELOG.md) 9차 변경, 상류 제보 [blocksds/sdk#401](https://codeberg.org/blocksds/sdk/issues/401)).
+> 이 문서는 당시 인수인계용으로 쓴 조사 과정 기록이다. 작업 방법의 최신판은 [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## 1. 개요
 
@@ -55,7 +59,7 @@
 
 ## 4. 현재 상태
 
-- **해결 (2026-10-03, 표의 13번)**: 근본 원인은 ARM7에서 `Wifi_Update()`가 겹쳐 실행되는 것이었다. 자세한 설명은 `HQ2-GUIDE.md` 9차 변경.
+- **해결 (2026-10-03, 표의 13번)**: 근본 원인은 ARM7에서 `Wifi_Update()`가 겹쳐 실행되는 것이었다. 자세한 설명은 [HQ2-CHANGELOG.md](HQ2-CHANGELOG.md) 9차 변경.
   - DSi에는 이 수정이 들어간 빌드(md5 `f1490512…`)가 올라가 있다. 이전 ROM은 `device-backups/hq2/`에 있다.
   - 실기 시험: `dumps/20261003-205841`에서 약 98KiB/s로 12분 넘게 재생했고 `mr`·`mw`·`resets`·`rej`·`lost`가 모두 0이었다.
 - `eac9e94`의 자동 복구(같은 위치로 다시 연결, Wi-Fi 재접속)는 안전장치로 그대로 둔다. 실기에서 재접속 경로가 실행된 적은 아직 없다.
@@ -75,7 +79,7 @@
    - 32KB 스레드 스택(`--wrap=cothread_create`)과 서버 `Pacer`는 해롭지 않으니 남겨도 된다.
 3. DSWiFi 상류(BlocksDS)에 알릴 만한 버그다: ARM7 FIFO 처리기에서 `Wifi_Update()` 재진입,
    `Wifi_TxArm9QueueFlush()`가 임계 구역 밖에서 크기를 읽음, `Wifi_MACRead/Write`가 길이 0을 DMA 개수 0(=65536)으로 넘김.
-4. `TODO.md`의 기능(검색 결과 더 많이, 페이지 표시, 영상 길이, 최근 검색어)은 그다음에 한다.
+4. ~~[TODO.md](TODO.md)의 검색 기능~~ 완료(10차 변경).
 
 ## 6. 관련 파일
 
@@ -85,4 +89,4 @@
 - `tools/prepare_hq2_arm7.py`: HQ2 전용 ARM7 생성(볼륨·배터리 캐시, 생존 신호, `Wifi_MACRead` 길이 검사)
 - `tools/build_hq2.sh`: ARM7(`--wrap=Wifi_MACRead`)과 ARM9 빌드
 - `server/server_quality.py`: `PLAY4`, `Pacer`, 이어받기, 덤프·블랙박스 기록
-- `HQ2-GUIDE.md`: 변경 이력(4~8차)
+- [HQ2-CHANGELOG.md](HQ2-CHANGELOG.md): 변경 이력

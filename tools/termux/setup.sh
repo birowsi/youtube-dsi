@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/sh
 # Install the YouTube DSi relay on an Android phone (Termux).
-# Expects the server files in ~/youtube-dsi/server (see HQ2-GUIDE.md).
+# Expects the server files in ~/youtube-dsi/server (see docs/HQ2-GUIDE.md).
 set -eu
 yes | pkg upgrade -y
 # Skip recommended extras (clang, llvm, ...): about 900 MB less.

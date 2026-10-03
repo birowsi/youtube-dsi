@@ -33,3 +33,6 @@ tools/emutest-build/
 # Release artifacts (upload to GitHub Releases instead)
 releases/
 publish/
+
+# Local backups of files replaced on the DSi / phone
+device-backups/

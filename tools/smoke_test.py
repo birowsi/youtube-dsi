@@ -43,7 +43,7 @@ def check_stream(command, frames):
                        (((p >> 5) & 7) * 255 // 7, ((p >> 2) & 7) * 255 // 7, (p & 3) * 255 // 3))
         image = Image.frombytes("RGB", (128, 96), colors).resize((256, 192), Image.Resampling.NEAREST)
         name = "youtube-preview.png" if command.startswith("PLAY") else "test-preview.png"
-        image.save(root / name)
+        image.save(root / "docs/legacy" / name)
         print(command, "frames:", frames, "audio RMS:", round(sum(rms)/len(rms), 1), "preview:", name)
         return {"command": command, "frames": frames, "audio_rms": round(sum(rms)/len(rms), 1)}
     finally:
@@ -66,5 +66,5 @@ if args.live:
     print("Live search:", entries[:3])
     checks.append({"search_results": count, "first_result": entries[0]})
     checks.append(check_stream("PLAY 2Wi9SJYScKg", 48))
-(root / "verification.json").write_text(json.dumps(checks, ensure_ascii=False, indent=2), encoding="utf-8")
+(root / "docs/legacy/verification.json").write_text(json.dumps(checks, ensure_ascii=False, indent=2), encoding="utf-8")
 print("PASS: wire protocol and AV checks")

@@ -19,5 +19,5 @@
 - [x] 최근 검색어: 실기 SD 카드에 저장되고 다시 켜도 남아 있음(2026-10-04).
 - [x] DSWiFi 버그 상류 제보: [blocksds/sdk#401](https://codeberg.org/blocksds/sdk/issues/401)(`Wifi_Update()` 재진입),
   [blocksds/sdk#402](https://codeberg.org/blocksds/sdk/issues/402)(`sys_arch_sem_wait()` 타임아웃). 고쳐지면 우회 코드를 뺄 수 있다.
-- [x] **장시간 재생 멈춤**: DSWiFi ARM7 `Wifi_Update()` 재진입이 원인(`HQ2-GUIDE.md` 9차 변경, 릴리스 `hq2-20261003`).
-- [x] 진단 코드 정리, 검색 결과 채널 이름, 화질·속도 고정(2026-10-04, `HQ2-GUIDE.md` 11차 변경).
+- [x] **장시간 재생 멈춤**: DSWiFi ARM7 `Wifi_Update()` 재진입이 원인([HQ2-CHANGELOG.md](HQ2-CHANGELOG.md) 9차 변경, 릴리스 `hq2-20261003`).
+- [x] 진단 코드 정리, 검색 결과 채널 이름, 화질·속도 고정(2026-10-04, [HQ2-CHANGELOG.md](HQ2-CHANGELOG.md) 11차 변경).

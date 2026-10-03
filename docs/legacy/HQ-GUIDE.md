@@ -1,6 +1,6 @@
 # YouTubeDSi HQ 사용·품질 설정
 
-기준판의 부팅·Wi-Fi 해결 내용은 [TROUBLESHOOTING-LOG.md](TROUBLESHOOTING-LOG.md)에 있다.
+기준판의 부팅·Wi-Fi 해결 내용은 [TROUBLESHOOTING-LOG.md](../TROUBLESHOOTING-LOG.md)에 있다.
 새 고화질판의 실기기 검증은 아직 필요하다. 에뮬레이터 결과와 구분한다.
 
 ## 실행

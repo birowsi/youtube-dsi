@@ -9,7 +9,7 @@ sdk = Path('/opt/wonderful/thirdparty/blocksds/core')
 out = Path(__file__).resolve().parents[1] / 'hardware-runtime'
 out.mkdir(exist_ok=True)
 crt = sdk / 'sys/crts'
-crt_source = Path(__file__).resolve().parents[2] / 'blocksds-reference/sys/crts'
+crt_source = Path(__file__).resolve().parents[2] / 'reference/blocksds-reference/sys/crts'
 for cpu in (7, 9):
     specs = (crt / f'ds_arm{cpu}.specs').read_text()
     specs = specs.replace(f'%:getenv(BLOCKSDS /sys/crts/ds_arm{cpu}_crt0%O)',

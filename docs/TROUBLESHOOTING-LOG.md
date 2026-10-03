@@ -128,7 +128,7 @@ python3 tools/analyze_compat.py
 
 개선판은 별도 이름 `YouTubeDSiHQ.nds`, 릴레이 `start-quality-server.cmd`와 포트
 8767을 사용한다. 기존 8765 릴레이와 기준판을 보존한다. 자세한 설정·품질 한계와
-검증 수치는 `investigation/quality`의 기록 및 `HQ-GUIDE.md`를 참조한다.
+검증 수치는 `investigation/quality`의 기록 및 [legacy/HQ-GUIDE.md](legacy/HQ-GUIDE.md)를 참조한다.
 실기기 검증 상태와 에뮬레이터 검증 상태를 구분해 기록한다.
 
 ## bunjalloo·post-title exploit 환경 추가 조사
@@ -142,7 +142,7 @@ python3 tools/analyze_compat.py
 Memory Pit 관련 외부 사례는 실행 환경 가설을 지지한다. 모든 title exploit의
 TWL Wi-Fi가 불가능하다는 결론은 아니며, 실기기 MBK 덤프와 네이티브 정지 명령은
 여전히 확인되지 않았다. 근거·공식 ROM 해시·CRT 명령·비교 화면·추가 시험의
-해석은 [실행환경 분석](investigation/bunjalloo/실행환경-분석.md)에 기록했다.
+해석은 [실행환경 분석](../investigation/bunjalloo/실행환경-분석.md)에 기록했다.
 기존 기준판·HQ ROM과 배포 ZIP을 보존했다. YouTubeDSi는 DSi 모드+NTR Wi-Fi
 조합을 유지하며 이 조사로 NAND나 시스템 소프트웨어를 변경하지 않았다.
 
@@ -154,7 +154,7 @@ Decode(Wi-Fi 처리 포함) 60ms 초과 때마다 22%씩 깎이고 거의 다시
 수를 줄인다(0바이트 = 이전 그림 유지). 밑 화면은 DSi Desk 스타일로 새로 그렸고, 검색 제목은
 PC가 Galmuri9로 렌더링해 한국어·일본어도 표시된다. 별도 이름 `YouTubeDSiHQ2.nds`,
 소스 `client-hq2/`이며 기존 HQ/Compat ROM과 `client/`는 바꾸지 않았다. 서버는 PLAY2/TEST2를
-그대로 유지했고, 원본은 `server/backup-20261001/`에 있다. 상세: [HQ2-GUIDE.md](HQ2-GUIDE.md).
+그대로 유지했고, 원본은 `server/backup-20261001/`에 있다. 상세: [HQ2-CHANGELOG.md](HQ2-CHANGELOG.md).
 실기 검증 전이다.
 
 ## 제작자 표기 통일 (2026-10-02)
@@ -169,5 +169,24 @@ PC가 Galmuri9로 렌더링해 한국어·일본어도 표시된다. 별도 이�
 | YouTubeDSiCompat.nds (기준판) | `b230264e8ce51541bd45c85e29f9dfabd3be2de204eeeeaf715eef55921bf84c` | `df5e9b87e4c02fed94e721c440dfedd6f137265ffb0ac39d2291ab753861b96d` |
 | YouTubeDSiHQ.nds | `4cb26a3450b2e148bfd40663d5f2e4e9a125357e9b6885cef82bd0a0e86db879` | `8dcb6f4f4ab8053b40d6368f8f4148053c4e89e295c5e16b5855bcc29c63178d` |
 
-원본은 `NDSi/_banner-backup-20261002/`에 경로 그대로 백업했고, 전체 목록과 해시는 `author-patch-log.json`에 있다.
+원본은 `NDSi/backups/banner-backup-20261002/`에 경로 그대로 백업했고, 전체 목록과 해시는 `author-patch-log.json`에 있다.
 에뮬레이터·조사 폴더의 증거용 사본과 `releases/` ZIP은 바꾸지 않았다. `client/Makefile`의 GAME_AUTHOR도 `hanbi`로 바꿨다.
+
+## TWL(DSi 전용) Wi-Fi 현황 정리 (2026-10-04)
+
+- **현재 결론**: YouTubeDSi는 모든 판이 DSi 모드에서 **DS 호환(NTR) Wi-Fi**를 쓴다(`WIFI_DS_MODE_ONLY`).
+  TWL Wi-Fi는 이 기기(일본판 DSi, 익스플로잇으로 진입한 TWiLight Menu++)에서 무선칩 초기화가 멈춰 포기했다.
+- **확인된 범위**: 실기 기록의 마지막 단계는 `0x32`(SDIO 컨트롤러 초기화 반환)다. 그 다음 `wifi_card_device_init()`
+  안쪽은 계측하지 못했다. DSWiFi 소스(`source/arm7/twl/card.twl.c`)에서 그 안의 시간 제한 없는 대기는 다음과 같다.
+  1. 전원 관리 칩에 Wi-Fi 전원을 켜는 I2C 쓰기(`i2cWriteRegister(I2C_PM, 0x30, 0x13)`)
+  2. SDIO 전압 협상 CMD5 `while (true)` 루프(준비 완료 비트 대기)
+  3. 무선칩 기능 블록 준비 대기
+  4. 무선칩 부트로더(BMI) 응답 대기
+- **유력한 가설(미확정)**: 익스플로잇 진입이라 보안 레지스터(SCFG)가 잠겨 있고, 런처가 Wi-Fi 모듈을 다른 상태로 넘겨줬을 수 있다.
+  같은 이유로 bunjalloo는 ARM7 메모리 연결(MBK)을 못 바꿔 32KB 미러에서 자기 코드를 지우는 문제가 에뮬레이터에서 재현됐다
+  (실기 MBK 덤프는 미확인). Unlaunch로 부팅하면 생기지 않을 가능성이 크지만 시험하지 않았다.
+- **기기 고장 가능성은 낮다**: 본체 설정의 WPA 연결 시험이 통과하면 무선칩 하드웨어는 배제된다.
+- **다음에 할 수 있는 것**: `tools/prepare_native_trace.py`로 1~4 단계마다 번호를 찍는 진단 ROM을 만들어 실기에서 멈춘 번호를 본다.
+  WPA2가 꼭 필요해지기 전에는 할 필요가 없다.
+- 참고: 장시간 재생 멈춤([blocksds/sdk#401](https://codeberg.org/blocksds/sdk/issues/401))은 NTR 드라이버 버그로, TWL과는 관계없다.
+

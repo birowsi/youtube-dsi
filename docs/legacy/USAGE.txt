@@ -1,3 +1,5 @@
+※ 2026-10-01 당시 안내(예전 HQ·Compat). 지금 사용법은 ../HQ2-GUIDE.md.
+
 YouTubeDSi 현재 안내 — 2026-10-01
 
 실기기에서 성공한 판: ../roms/tools/YouTubeDSiCompat.nds
@@ -26,7 +28,7 @@ HQ는 미리 받는 버퍼와 자동 JPEG 품질 조절을 사용한다.
 DSi 모드와 CPU 133MHz 조건에서 사용한다.
 
 상세 사용·품질·검증 한계: HQ-GUIDE.md
-흰 화면·접속 해결 원인, 고정 버전, 재빌드·복원: TROUBLESHOOTING-LOG.md
+흰 화면·접속 해결 원인, 고정 버전, 재빌드·복원: ../TROUBLESHOOTING-LOG.md
 상세 원본 조사: investigation/HARDWARE_FINDINGS.md
 실기기 성공 기준판 백업: releases/YouTubeDSiCompat-20261001.zip
 새 HQ 검증 수치: investigation/quality/verification.json

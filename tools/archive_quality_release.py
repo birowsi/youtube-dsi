@@ -27,7 +27,7 @@ for target in (root.parent/'roms/tools/YouTubeDSiHQ.nds',root/'sd-root/YouTubeDS
     preserve_copy(rom,target)
 release=root/'releases/YouTubeDSiHQ-20261001'
 files=[rom,root/'client/Makefile',root/'youtube-dsi.ini',
-       root/'start-quality-server.cmd',root/'TROUBLESHOOTING-LOG.md',root/'HQ-GUIDE.md',root/'USAGE.txt']
+       root/'start-quality-server.cmd',root/'docs/TROUBLESHOOTING-LOG.md',root/'docs/legacy/HQ-GUIDE.md',root/'docs/legacy/USAGE.txt']
 files += list((root/'client/source').glob('*.[ch]'))
 files += [root/'server/server.py',root/'server/server_quality.py',root/'server/requirements-quality.txt']
 files += [p for p in (root/'server/vendor').rglob('*') if p.is_file() and '__pycache__' not in p.parts]

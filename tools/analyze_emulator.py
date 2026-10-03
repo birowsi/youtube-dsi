@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "emulator-final"
+OUT = ROOT / "investigation/emulator-runs/emulator-final"
 rom = ROOT / "client/YouTubeDSi.nds"
 audio = np.fromfile(OUT / "audio.pcm", dtype="<i2").reshape(-1, 2)
 seconds = len(audio) // 48000

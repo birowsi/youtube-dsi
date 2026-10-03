@@ -11,7 +11,7 @@ def run(args):
     return p.stdout
 def inventory():
     data={}
-    for name,p in [('sdk',ROOT/'blocksds-reference')]+[(n,ROOT/'youtube-dsi/tools'/n) for n in ['dswifi-src','libnds-src','maxmod-src','melonDS-src','nds-bootstrap-research','twilight-research']]:
+    for name,p in [('sdk',ROOT/'reference/blocksds-reference')]+[(n,ROOT/'youtube-dsi/tools'/n) for n in ['dswifi-src','libnds-src','maxmod-src','melonDS-src','nds-bootstrap-research','twilight-research']]:
         data[name]={'head':run(['git','-C',p,'log','-1','--format=%H %cs %s']).strip(), 'remote':run(['git','-C',p,'remote','-v']).strip(),'shallow':run(['git','-C',p,'rev-parse','--is-shallow-repository']).strip(), 'status':run(['git','-C',p,'status','--short']).strip()}
     data['installed_version']=(SDK/'version.txt').read_text()
     data['compiler']=run([BIN/'arm-none-eabi-gcc','--version'])
