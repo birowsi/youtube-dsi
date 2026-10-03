@@ -320,15 +320,13 @@ int ui_home_hit(int x, int y) {
 #define ROW_Y 20
 #define ROW_H 34
 void ui_results(const char *query, int count, int selected, int pressed,
-                const char (*titles)[101], const uint8_t *bitmaps) {
+                const char (*titles)[101], const uint8_t *bitmaps, const int *durations) {
     begin();
     int pages = (count + UI_RESULTS_PER_PAGE - 1) / UI_RESULTS_PER_PAGE;
     int page = selected / UI_RESULTS_PER_PAGE;
-    char right[24] = "";
-    if (pages > 1) snprintf(right, sizeof(right), "%d / %d", page + 1, pages);
     char title[264];
     snprintf(title, sizeof(title), "\"%s\"", query);
-    title_bar(title, right);
+    title_bar(title, NULL);
     if (!count) {
         rect(paint, 16, 58, 224, 40, PAPER); outline(paint, 16, 58, 224, 40, RULE);
         text_center(paint, 128, 73, "No results", INK);
@@ -345,9 +343,22 @@ void ui_results(const char *query, int count, int selected, int pressed,
             const uint8_t *b = bitmaps + i * UI_TITLE_BYTES;
             blit1(paint, 14, y + (one_line(b) ? 12 : 6), b, UI_TITLE_W, UI_TITLE_H, INK);
         }
-        else text_wrap(paint, 14, y + 5, titles[i], 232, 2, INK);
+        else text_wrap(paint, 14, y + 5, titles[i], UI_RESULT_TITLE_W, 2, INK);
+        int d = durations ? durations[i] : 0;
+        if (d) {
+            char length[32];
+            if (d < 0) snprintf(length, sizeof(length), "LIVE");
+            else if (d >= 3600) snprintf(length, sizeof(length), "%d:%02d:%02d", d / 3600, d / 60 % 60, d % 60);
+            else snprintf(length, sizeof(length), "%d:%02d", d / 60, d % 60);
+            text_at(paint, 246 - text_width(length), y + 12, length, d < 0 ? WARNING : MUTED, 1);
+        }
     }
     footer("A: Play   B: Back   Up/Down: Select", pages > 1 ? "L / R: Page   Tap a title to play" : "Tap a title to play");
+    if (pages > 1) {
+        char where[32];
+        snprintf(where, sizeof(where), "Page %d / %d", page + 1, pages);
+        text_at(paint, 249 - text_width(where), 166, where, INK, 1);
+    }
     publish();
 }
 
@@ -463,7 +474,7 @@ static void strokes_from_utf8(const char *t) {
 }
 
 // ---- Touch keyboard -------------------------------------------------------
-enum { K_SHIFT = 1, K_BACK = 2, K_SPACE = 3, K_OK = 4, K_LANG = 5 };
+enum { K_SHIFT = 1, K_BACK = 2, K_SPACE = 3, K_OK = 4, K_LANG = 5, K_RECENT = 6 };
 typedef struct { int x, y, w, h; int code; } Key;
 static Key keys[64];
 static int key_count;
@@ -484,7 +495,7 @@ static unsigned ko_key(int c, int shift) {
 static void add_key(int x, int y, int w, int code) {
     keys[key_count++] = (Key){x, y, w, 21, code};
 }
-static void layout_keys(int hangul_allowed) {
+static void layout_keys(int hangul_allowed, int with_recent) {
     key_count = 0;
     const int pitch = 23, y0 = 46;
     const char *digits = "1234567890-";
@@ -496,13 +507,61 @@ static void layout_keys(int hangul_allowed) {
     for (int i = 0; i < 8; i++) add_key(37 + i * pitch, y, 22, rows[2][i]);
     add_key(221, y, 33, -K_BACK);
     y += pitch;
-    if (hangul_allowed) {
-        add_key(2, y, 44, -K_LANG);
-        add_key(48, y, 136, -K_SPACE);
-    } else add_key(2, y, 182, -K_SPACE);
+    int x = 2;
+    if (hangul_allowed) { add_key(x, y, 44, -K_LANG); x += 46; }
+    add_key(x, y, (with_recent ? 140 : 184) - x, -K_SPACE);
+    if (with_recent) add_key(142, y, 42, -K_RECENT);
     add_key(186, y, 68, -K_OK);
 }
-static void draw_keyboard(const char *label, const char *text, int shift, int korean, int pressed) {
+
+// ---- Recent searches ------------------------------------------------------
+#define RECENT_Y 20
+#define RECENT_H 16
+static void draw_recent(char (*recent)[UI_RECENT_LEN], int count, int selected, int pressed) {
+    begin();
+    title_bar("Recent searches", NULL);
+    if (!count) {
+        rect(paint, 16, 58, 224, 40, PAPER); outline(paint, 16, 58, 224, 40, RULE);
+        text_center(paint, 128, 73, "No recent searches", INK);
+    }
+    for (int i = 0; i < count; i++) {
+        int y = RECENT_Y + i * (RECENT_H + 1);
+        rect(paint, 4, y, 248, RECENT_H, i == pressed ? CHROME : PAPER);
+        outline(paint, 4, y, 248, RECENT_H, i == selected ? ACCENT : RULE);
+        if (i == selected) rect(paint, 4, y, 4, RECENT_H, ACCENT);
+        text_fit(paint, 14, y + 3, recent[i], 232, INK);
+    }
+    footer(count ? "A: Search   B: Back   X: Delete" : "B: Back", count ? "Up/Down: Select   Tap to search" : NULL);
+    publish();
+}
+// Returns the index picked with A or a tap (on release), or -1 for B.
+static int recent_pick(char (*recent)[UI_RECENT_LEN], int *count, void (*tick)(void)) {
+    int selected = 0, pressed = -1, dirty = 1;
+    while (1) {
+        if (dirty) { draw_recent(recent, *count, selected, pressed); dirty = 0; }
+        tick();
+        unsigned down = keysDown(), held = keysHeld();
+        if (down & KEY_B) return -1;
+        if (!*count) continue;
+        if (down & KEY_A) return selected;
+        if ((down & KEY_UP) && selected > 0) { selected--; dirty = 1; }
+        if ((down & KEY_DOWN) && selected + 1 < *count) { selected++; dirty = 1; }
+        if (down & KEY_X) {
+            memmove(recent[selected], recent[selected + 1], (*count - selected - 1) * UI_RECENT_LEN);
+            if (--*count && selected >= *count) selected = *count - 1;
+            pressed = -1; dirty = 1;
+        }
+        touchPosition t;
+        touchRead(&t);
+        int row = t.py >= RECENT_Y ? (t.py - RECENT_Y) / (RECENT_H + 1) : -1;
+        if (t.px < 4 || t.px >= 252 || row >= *count) row = -1;
+        if (down & KEY_TOUCH) {
+            if (row >= 0) { pressed = selected = row; dirty = 1; }
+        } else if (pressed >= 0 && !(held & KEY_TOUCH)) return pressed;
+    }
+}
+
+static void draw_keyboard(const char *label, const char *text, int shift, int korean, int pressed, int with_recent) {
     begin();
     title_bar(label, NULL);
     rect(paint, 6, 21, 244, 20, PAPER); outline(paint, 6, 21, 244, 20, ACCENT);
@@ -529,15 +588,18 @@ static void draw_keyboard(const char *label, const char *text, int shift, int ko
         else if (k->code == -K_SPACE) { snprintf(cap, sizeof(cap), "space"); color = MUTED; }
         else if (k->code == -K_OK) { snprintf(cap, sizeof(cap), "OK"); color = ACCENT; }
         else if (k->code == -K_LANG) snprintf(cap, sizeof(cap), korean ? "\xed\x95\x9c" : "A");
+        else if (k->code == -K_RECENT) snprintf(cap, sizeof(cap), "Recent");
         text_at(paint, k->x + (k->w - text_width(cap)) / 2 + d, k->y + 6 + d, cap, color, 1);
     }
     footer(korean ? "START: OK   B: Cancel   SELECT: Clear   L: \xed\x95\x9c/A"
-                  : "START: OK   B: Cancel   SELECT: Clear", NULL);
+                  : "START: OK   B: Cancel   SELECT: Clear", with_recent ? "Up: Recent searches" : NULL);
     publish();
 }
 
-int ui_keyboard(const char *label, char *text, unsigned size, void (*tick)(void), int hangul_allowed) {
-    layout_keys(hangul_allowed);
+int ui_keyboard(const char *label, char *text, unsigned size, void (*tick)(void), int hangul_allowed,
+                char (*recent)[UI_RECENT_LEN], int *recent_count) {
+    int with_recent = recent && *recent_count > 0;
+    layout_keys(hangul_allowed, with_recent);
     strokes_from_utf8(text);
     static int korean_mode = 1;
     int korean = hangul_allowed && korean_mode;
@@ -545,14 +607,14 @@ int ui_keyboard(const char *label, char *text, unsigned size, void (*tick)(void)
     char composed[256];
     compose(composed, sizeof(composed));
     while (1) {
-        if (dirty) { draw_keyboard(label, composed, shift, korean, pressed); dirty = 0; }
+        if (dirty) { draw_keyboard(label, composed, shift, korean, pressed, with_recent); dirty = 0; }
         tick();
         unsigned down = keysDown(), held = keysHeld();
         if (down & KEY_B) return 0;
         if ((down & KEY_START) && composed[0]) { snprintf(text, size, "%s", composed); return 1; }
         if (down & KEY_SELECT) { stroke_count = 0; composed[0] = 0; dirty = 1; }
         if ((down & KEY_L) && hangul_allowed) { korean = korean_mode = !korean; shift = 0; dirty = 1; }
-        int hit = -1;
+        int hit = -1, open_recent = with_recent && (down & KEY_UP);
         if (down & KEY_TOUCH) {
             touchPosition t;
             touchRead(&t);
@@ -569,11 +631,12 @@ int ui_keyboard(const char *label, char *text, unsigned size, void (*tick)(void)
             Key *k = &keys[hit];
             if (k->code == -K_OK) {
                 if (!composed[0]) continue;
-                draw_keyboard(label, composed, shift, korean, pressed);
+                draw_keyboard(label, composed, shift, korean, pressed, with_recent);
                 snprintf(text, size, "%s", composed);
                 return 1;
             }
-            if (k->code == -K_SHIFT) shift = !shift;
+            if (k->code == -K_RECENT) open_recent = 1;
+            else if (k->code == -K_SHIFT) shift = !shift;
             else if (k->code == -K_LANG) { korean = korean_mode = !korean; shift = 0; }
             else if (k->code == -K_BACK) { if (stroke_count) stroke_count--; }
             else if (stroke_count < MAX_KEYS) {
@@ -588,6 +651,15 @@ int ui_keyboard(const char *label, char *text, unsigned size, void (*tick)(void)
             }
             compose(composed, sizeof(composed));
             dirty = 1;
+        }
+        if (open_recent) {
+            int pick = recent_pick(recent, recent_count, tick);
+            if (pick >= 0) { snprintf(text, size, "%s", recent[pick]); return 1; }
+            // Back to typing; the Recent key goes away once every entry was deleted.
+            with_recent = *recent_count > 0;
+            layout_keys(hangul_allowed, with_recent);
+            pressed = -1; dirty = 1;
+            continue;
         }
         if (pressed >= 0 && !(held & KEY_TOUCH)) { pressed = -1; dirty = 1; }
     }

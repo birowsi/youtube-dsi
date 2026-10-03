@@ -13,6 +13,9 @@ measured Wi-Fi rate, instead of squeezing every frame into a small JPEG.
 Feedback: BUF milliseconds state decode_ms late_frames_per_second [hidden].
 hidden=1 means the DSi lid is closed: only audio is needed, so no pictures are sent.
 SEARCH3 adds a 1-bit Galmuri9 title bitmap per result after the text lines.
+SEARCH4 (2026-10-03) returns up to 24 results; each text line is
+"id<TAB>length_seconds<TAB>title" (length 0 unknown, -1 live), and the title
+bitmaps are wrapped narrower so the DSi can draw the length to their right.
 
 PLAY4 <id> <start_seconds> is PLAY3 from a position, for seeking. It answers
 "OK STREAM4 <duration_seconds> <start_seconds>" before the YDS3 header. The
@@ -48,6 +51,8 @@ SAMPLES = RATE // FPS
 HEADER = struct.pack('<4s8I', b'YDS2', WIDTH, HEIGHT, FPS, RATE, SAMPLES, 2, 1, 1)
 HEADER3 = struct.pack('<4s8I', b'YDS3', WIDTH, HEIGHT, FPS, RATE, SAMPLES, 2, 1, 1)
 TITLE_W, TITLE_H = 232, 22
+# SEARCH4: more results per search; titles wrap at 188 px, leaving room for the length.
+SEARCH4_RESULTS, SEARCH4_WRAP = 24, 188
 FONT_PATH = Path(__file__).resolve().parent / 'fonts' / 'Galmuri9.ttf'
 TEST_STALL_MS = 0
 # Set by a new PLAY request so the stream still holding PLAY_LOCK ends at once.
@@ -481,8 +486,9 @@ def live_frames(video, audio, start=0):
 _title_font = None
 
 
-def title_bitmap(title):
-    """Wrap a Unicode title into two Galmuri9 lines; return a 1-bit MSB-first bitmap."""
+def title_bitmap(title, wrap=TITLE_W):
+    """Wrap a Unicode title into two Galmuri9 lines of `wrap` pixels; return a
+    TITLE_W x TITLE_H 1-bit MSB-first bitmap."""
     global _title_font
     if _title_font is None:
         _title_font = ImageFont.truetype(str(FONT_PATH), 10)
@@ -492,17 +498,17 @@ def title_bitmap(title):
     for row in range(2):
         if not rest:
             break
-        if font.getlength(rest) <= TITLE_W or row == 1:
+        if font.getlength(rest) <= wrap or row == 1:
             line = rest
-            if font.getlength(line) > TITLE_W:
-                while line and font.getlength(line + '...') > TITLE_W:
+            if font.getlength(line) > wrap:
+                while line and font.getlength(line + '...') > wrap:
                     line = line[:-1]
                 line = line.rstrip() + '...'
             lines.append(line)
             rest = ''
             break
         cut = len(rest)
-        while cut > 1 and font.getlength(rest[:cut]) > TITLE_W:
+        while cut > 1 and font.getlength(rest[:cut]) > wrap:
             cut -= 1
         space = rest.rfind(' ', 0, cut + 1)
         if space > cut // 2:
@@ -545,6 +551,16 @@ class Handler(legacy.Handler):
                     title = legacy.re.sub(r'[\t\r\n]', ' ', item['title'])
                     lines.append(item['id']+'\t'+title.encode('ascii','replace').decode()[:100]+'\n')
                     bitmaps.append(title_bitmap(title))
+                self.request.sendall(''.join(lines).encode('ascii') + b''.join(bitmaps))
+            elif cmd == 'SEARCH4':
+                results = legacy.search(arg, count=SEARCH4_RESULTS)
+                lines = [f'OK {len(results)} {TITLE_W} {TITLE_H}\n']
+                bitmaps = []
+                for item in results:
+                    title = legacy.re.sub(r'[\t\r\n]', ' ', item['title'])
+                    lines.append(f"{item['id']}\t{item['duration']}\t"
+                                 + title.encode('ascii','replace').decode()[:100] + '\n')
+                    bitmaps.append(title_bitmap(title, SEARCH4_WRAP))
                 self.request.sendall(''.join(lines).encode('ascii') + b''.join(bitmaps))
             elif cmd in ('PLAY4','PLAY3','TEST3','PLAY2','TEST2','PLAY','TEST'):
                 locked = legacy.PLAY_LOCK.acquire(blocking=False)

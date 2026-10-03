@@ -56,13 +56,15 @@ def ydl_options(**extra):
     return options
 
 
-def search(query):
+def search(query, count=8):
     if not query.strip() or len(query) > 200:
         raise ValueError("Search must contain 1-200 characters")
     state(state="searching", last_query=query, error="")
-    with yt_dlp.YoutubeDL(ydl_options(extract_flat="in_playlist", playlistend=8)) as ydl:
-        data = ydl.extract_info("ytsearch8:" + query, download=False)
-    results = [{"id": entry["id"], "title": entry.get("title", entry["id"])}
+    with yt_dlp.YoutubeDL(ydl_options(extract_flat="in_playlist", playlistend=count)) as ydl:
+        data = ydl.extract_info(f"ytsearch{count}:" + query, download=False)
+    # duration: seconds, 0 unknown, -1 live stream
+    results = [{"id": entry["id"], "title": entry.get("title", entry["id"]),
+                "duration": -1 if entry.get("live_status") == "is_live" else int(entry.get("duration") or 0)}
                for entry in data.get("entries", []) if entry and re.fullmatch(r"[\w-]{11}", entry.get("id", ""))]
     state(state="ready", results=results)
     return results

@@ -28,9 +28,15 @@
 static char host[64] = "192.168.0.4", ini_host[64];
 static int port = 8767;
 static char error_text[440];
-static char ids[8][12], titles[8][101];
-static uint8_t title_bitmaps[8][UI_TITLE_BYTES];
+#define MAX_RESULTS 24  // SEARCH4 sends up to 24
+static char ids[MAX_RESULTS][12], titles[MAX_RESULTS][101];
+static uint8_t title_bitmaps[MAX_RESULTS][UI_TITLE_BYTES];
+static int durations[MAX_RESULTS];  // seconds, 0 unknown, -1 live
 static int results, selected, have_bitmaps;
+// Earlier searches, newest first, kept on the SD card.
+#define RECENT_FILE "/youtube-dsi-recent.txt"
+static char recent[UI_RECENT_MAX][UI_RECENT_LEN];
+static int recent_count, sd_ready;
 static int quiet;  // no status pages while reopening a stream for a seek
 static void tick(void);
 
@@ -87,8 +93,40 @@ static void show_error(void) {
     wait_a();
 }
 
+static void load_recent(void) {
+    FILE *file = fopen(RECENT_FILE, "r");
+    if (!file) return;
+    char line[UI_RECENT_LEN + 2];
+    while (recent_count < UI_RECENT_MAX && fgets(line, sizeof(line), file)) {
+        line[strcspn(line, "\r\n")] = 0;
+        if (line[0] && strlen(line) < UI_RECENT_LEN) strcpy(recent[recent_count++], line);
+    }
+    fclose(file);
+}
+
+static void save_recent(void) {
+    if (!sd_ready) return;
+    FILE *file = fopen(RECENT_FILE, "w");
+    if (!file) return;
+    for (int i = 0; i < recent_count; i++) fprintf(file, "%s\n", recent[i]);
+    fclose(file);
+}
+
+// Move `query` to the front of the recent list (dropping the oldest when full) and save it.
+static void remember_search(const char *query) {
+    int at = 0;
+    while (at < recent_count && strcmp(recent[at], query)) at++;
+    if (at == recent_count && recent_count < UI_RECENT_MAX) recent_count++;
+    if (at >= UI_RECENT_MAX) at = UI_RECENT_MAX - 1;
+    memmove(recent[1], recent[0], at * UI_RECENT_LEN);
+    snprintf(recent[0], UI_RECENT_LEN, "%s", query);
+    save_recent();
+}
+
 static void load_config(void) {
     if (!fatInitDefault()) return;
+    sd_ready = 1;
+    load_recent();
     const char *paths[] = {"sd:/youtube-dsi.ini", "/youtube-dsi.ini"};
     FILE *file = NULL;
     for (unsigned i = 0; i < 2 && !file; i++) file = fopen(paths[i], "r");
@@ -286,20 +324,22 @@ static void server_error(const char *line) {
 
 static int search(const char *query) {
     char command[264], line[440] = "";
-    snprintf(command, sizeof(command), "SEARCH3 %s\n", query);
+    snprintf(command, sizeof(command), "SEARCH4 %s\n", query);
     int fd = open_request(command, "Searching");
     if (fd < 0) return 0;
     ui_status("Searching", "Searching YouTube...", query, "B: Cancel");
     int ok = receive_line(fd, line, sizeof(line)), w = 0, h = 0;
     have_bitmaps = 0;
-    if (ok && sscanf(line, "OK %d %d %d", &results, &w, &h) >= 1 && results >= 0 && results <= 8) {
+    if (ok && sscanf(line, "OK %d %d %d", &results, &w, &h) >= 1 && results >= 0 && results <= MAX_RESULTS) {
         for (int i = 0; i < results; i++) {
             if (!receive_line(fd, line, sizeof(line))) { ok = 0; break; }
-            char *tab = strchr(line, '\t');
-            if (!tab || tab - line != 11) { ok = 0; break; }
+            // id <TAB> length in seconds <TAB> title
+            char *tab = strchr(line, '\t'), *tab2 = tab ? strchr(tab + 1, '\t') : NULL;
+            if (!tab || tab - line != 11 || !tab2) { ok = 0; break; }
             *tab = 0;
             memcpy(ids[i], line, 11); ids[i][11] = 0;
-            snprintf(titles[i], sizeof(titles[i]), "%.100s", tab + 1);
+            durations[i] = atoi(tab + 1);
+            snprintf(titles[i], sizeof(titles[i]), "%.100s", tab2 + 1);
         }
         if (ok && w == UI_TITLE_W && h == UI_TITLE_H) {
             for (int i = 0; i < results && ok; i++)
@@ -380,7 +420,7 @@ static void home_redraw(int pressed) { ui_home(host, port, pressed); }
 static int result_hit(int x, int y) { return ui_results_hit(x, y, selected, results) + 1; }
 static char last_query[240];
 static void results_redraw(int pressed) {
-    ui_results(last_query, results, selected, pressed - 1, titles, have_bitmaps ? title_bitmaps[0] : NULL);
+    ui_results(last_query, results, selected, pressed - 1, titles, have_bitmaps ? title_bitmaps[0] : NULL, durations);
 }
 
 static void results_loop(void) {
@@ -456,20 +496,22 @@ int main(void) {
         if (action == 3) {
             char edit[64];
             snprintf(edit, sizeof(edit), "%s", host);
-            if (ui_keyboard("Server address (IPv4)", edit, sizeof(edit), tick, 0)) {
+            if (ui_keyboard("Server address (IPv4)", edit, sizeof(edit), tick, 0, NULL, NULL)) {
                 snprintf(host, sizeof(host), "%s", edit);
                 ui_top_splash(host, port);
             }
         } else if (action == 2) {
             if (!playback(-1)) show_error();
         } else if (action == 1) {
-            char query[240] = "";
+            char query[UI_RECENT_LEN] = "";
             snprintf(query, sizeof(query), "%s", last_query);
-            if (ui_keyboard("Search YouTube", query, sizeof(query), tick, 1)) {
+            int had = recent_count;
+            if (ui_keyboard("Search YouTube", query, sizeof(query), tick, 1, recent, &recent_count)) {
                 snprintf(last_query, sizeof(last_query), "%s", query);
+                remember_search(query);
                 if (search(query)) results_loop();
                 else show_error();
-            }
+            } else if (recent_count != had) save_recent();  // entries deleted in the list
         }
         if (action) ui_home(host, port, 0);
     }

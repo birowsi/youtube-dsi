@@ -22,12 +22,20 @@ void ui_home(const char *host, int port, int pressed);
 int ui_home_hit(int x, int y);  // 1 search, 2 test, 3 server IP, 0 none
 
 #define UI_RESULTS_PER_PAGE 4
+// SEARCH4 title bitmaps wrap at this width; the video length goes to their right.
+#define UI_RESULT_TITLE_W 188
+// durations: seconds per result (0 unknown, -1 live), or NULL.
 void ui_results(const char *query, int count, int selected, int pressed,
-                const char (*titles)[101], const uint8_t *bitmaps);
+                const char (*titles)[101], const uint8_t *bitmaps, const int *durations);
 int ui_results_hit(int x, int y, int selected, int count);  // index, or -1
 
+#define UI_RECENT_MAX 8
+#define UI_RECENT_LEN 240
 // Edits UTF-8 `text` in place; Hangul (dubeolsik) input when hangul_allowed.
-int ui_keyboard(const char *label, char *text, unsigned size, void (*tick)(void), int hangul_allowed);
+// recent: earlier searches, newest first, or NULL. Up or the Recent key lists them;
+// picking one returns 1 with it in `text`. X there deletes one and lowers *recent_count.
+int ui_keyboard(const char *label, char *text, unsigned size, void (*tick)(void), int hangul_allowed,
+                char (*recent)[UI_RECENT_LEN], int *recent_count);
 
 typedef struct {
     const uint8_t *title_bitmap;  // UI_TITLE_BYTES, or NULL
