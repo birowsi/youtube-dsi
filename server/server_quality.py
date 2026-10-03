@@ -16,6 +16,9 @@ SEARCH3 adds a 1-bit Galmuri9 title bitmap per result after the text lines.
 SEARCH4 (2026-10-03) returns up to 24 results; each text line is
 "id<TAB>length_seconds<TAB>title" (length 0 unknown, -1 live), and the title
 bitmaps are wrapped narrower so the DSi can draw the length to their right.
+SEARCH5 (2026-10-04) is SEARCH4 plus the channel name: "OK n w h cw ch", lines
+"id<TAB>length<TAB>channel<TAB>title", and after each title bitmap a one-line
+cw x ch channel bitmap.
 
 PLAY4 <id> <start_seconds> is PLAY3 from a position, for seeking. It answers
 "OK STREAM4 <duration_seconds> <start_seconds>" before the YDS3 header. The
@@ -53,6 +56,7 @@ HEADER3 = struct.pack('<4s8I', b'YDS3', WIDTH, HEIGHT, FPS, RATE, SAMPLES, 2, 1,
 TITLE_W, TITLE_H = 232, 22
 # SEARCH4: more results per search; titles wrap at 188 px, leaving room for the length.
 SEARCH4_RESULTS, SEARCH4_WRAP = 24, 188
+CHANNEL_W, CHANNEL_H = 232, 12
 FONT_PATH = Path(__file__).resolve().parent / 'fonts' / 'Galmuri9.ttf'
 TEST_STALL_MS = 0
 # Set by a new PLAY request so the stream still holding PLAY_LOCK ends at once.
@@ -139,13 +143,15 @@ class SmartRate:
     steady quality moves a few steps every two seconds, so it does not jump
     from frame to frame with scene complexity.
     """
-    QMIN, QMAX, MAX_GAP = 50, 88, 3
+    # Above q80 the JPEG grows ~20% for little visible gain on the 256x192 RGB555
+    # screen; spare bytes go to more pictures per second instead.
+    QMIN, QMAX, MAX_GAP = 50, 80, 3
     RATE_MIN, RATE_MAX = 40000.0, 220000.0
 
     def __init__(self):
-        self.rate = 84000.0          # video bytes per second (audio is extra)
+        self.rate = 90000.0          # video bytes per second (audio is extra); ~DSi NTR Wi-Fi
         self.tokens = self.rate * 0.3
-        self.q = 70
+        self.q = 64
         self.gap = 0
         self.first = True
         self.window = collections.deque(maxlen=FPS * 2)
@@ -399,11 +405,12 @@ def resolve(video_id):
         raise ValueError('Invalid YouTube ID')
     legacy.state(state='resolving', last_video=video_id, error='')
     with legacy.yt_dlp.YoutubeDL(legacy.ydl_options(
-            # Plain HTTPS files first: some videos offer 480p only as HLS, whose
-            # segments failed to open on the phone relay and seek poorly.
-            format='bestvideo[height<=480][vcodec^=avc1][protocol=https]+bestaudio[ext=m4a][protocol=https]/'
-                   'bestvideo[height<=480][vcodec^=avc1]+bestaudio[ext=m4a]/'
-                   'bestvideo[height<=480]+bestaudio/best[height<=480]/best')) as ydl:
+            # The DSi shows 256x144 (16:9), so 360p is plenty and costs the relay less
+            # than 480p. Plain HTTPS files first: HLS segments failed to open on the
+            # phone relay and seek poorly.
+            format='bestvideo[height<=360][vcodec^=avc1][protocol=https]+bestaudio[ext=m4a][protocol=https]/'
+                   'bestvideo[height<=360][vcodec^=avc1]+bestaudio[ext=m4a]/'
+                   'bestvideo[height<=360]+bestaudio/best[height<=360]/best')) as ydl:
         data = ydl.extract_info('https://www.youtube.com/watch?v='+video_id, download=False)
     streams = data.get('requested_formats') or [data]
     video = next((f for f in streams if f.get('vcodec') != 'none'), None)
@@ -486,13 +493,17 @@ def live_frames(video, audio, start=0):
 _title_font = None
 
 
-def title_bitmap(title, wrap=TITLE_W):
-    """Wrap a Unicode title into two Galmuri9 lines of `wrap` pixels; return a
-    TITLE_W x TITLE_H 1-bit MSB-first bitmap."""
+def title_font():
     global _title_font
     if _title_font is None:
         _title_font = ImageFont.truetype(str(FONT_PATH), 10)
-    font = _title_font
+    return _title_font
+
+
+def title_bitmap(title, wrap=TITLE_W):
+    """Wrap a Unicode title into two Galmuri9 lines of `wrap` pixels; return a
+    TITLE_W x TITLE_H 1-bit MSB-first bitmap."""
+    font = title_font()
     text = ' '.join(title.split())
     lines, rest = [], text
     for row in range(2):
@@ -519,6 +530,18 @@ def title_bitmap(title, wrap=TITLE_W):
     draw = ImageDraw.Draw(image)
     for row, line in enumerate(lines):
         draw.text((0, row * 12 - 1), line, font=font, fill=255)
+    return image.point(lambda p: 255 if p >= 90 else 0, mode='1').tobytes()
+
+
+def channel_bitmap(name):
+    """One Galmuri9 line, cut with '...' to CHANNEL_W; 1-bit MSB-first bitmap."""
+    font, text = title_font(), ' '.join(name.split())
+    if font.getlength(text) > CHANNEL_W:
+        while text and font.getlength(text + '...') > CHANNEL_W:
+            text = text[:-1]
+        text = text.rstrip() + '...'
+    image = Image.new('L', (CHANNEL_W, CHANNEL_H))
+    ImageDraw.Draw(image).text((0, -1), text, font=font, fill=255)
     return image.point(lambda p: 255 if p >= 90 else 0, mode='1').tobytes()
 
 
@@ -551,6 +574,18 @@ class Handler(legacy.Handler):
                     title = legacy.re.sub(r'[\t\r\n]', ' ', item['title'])
                     lines.append(item['id']+'\t'+title.encode('ascii','replace').decode()[:100]+'\n')
                     bitmaps.append(title_bitmap(title))
+                self.request.sendall(''.join(lines).encode('ascii') + b''.join(bitmaps))
+            elif cmd == 'SEARCH5':
+                results = legacy.search(arg, count=SEARCH4_RESULTS)
+                lines = [f'OK {len(results)} {TITLE_W} {TITLE_H} {CHANNEL_W} {CHANNEL_H}\n']
+                bitmaps = []
+                for item in results:
+                    title = legacy.re.sub(r'[\t\r\n]', ' ', item['title'])
+                    channel = legacy.re.sub(r'[\t\r\n]', ' ', item['channel'])
+                    lines.append(f"{item['id']}\t{item['duration']}\t"
+                                 + channel.encode('ascii','replace').decode()[:60] + '\t'
+                                 + title.encode('ascii','replace').decode()[:100] + '\n')
+                    bitmaps.append(title_bitmap(title, SEARCH4_WRAP) + channel_bitmap(channel))
                 self.request.sendall(''.join(lines).encode('ascii') + b''.join(bitmaps))
             elif cmd == 'SEARCH4':
                 results = legacy.search(arg, count=SEARCH4_RESULTS)

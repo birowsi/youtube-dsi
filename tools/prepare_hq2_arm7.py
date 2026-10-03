@@ -1,16 +1,10 @@
-"""HQ2-only ARM7: DSi volume and battery for the ARM9, plus a heartbeat.
+"""HQ2-only ARM7: DSi volume and battery for the ARM9, and DSWiFi fixes.
 
 The ARM7 reads both I2C registers in its main loop with interrupts disabled, once
 a second, so the reads cannot interleave with libnds' own I2C use in interrupt
 handlers. A request on FIFO_USER_08 is answered at once from the cached values:
-    bits 0-7 volume (0-31), bits 8-15 battery (getBatteryLevel), bit 16 valid,
-    bits 17-31 how many unsafe Wifi_MACRead() lengths were rejected.
-The ARM9 never waits for an answer. The ARM9 also sends (as an address message on the
-same channel) a word in main RAM that the ARM7 main loop increments every VBlank; the
-ARM9 watchdog reads it to tell a dead ARM7 from a blocked FIFO; the next word holds
-how many unsafe Wifi_MACWrite() lengths were rejected. (An earlier version used the
-IPC sync register, which the TWiLight/nds-bootstrap loader watches on real hardware:
-the DSi froze within a second.)
+    bits 0-7 volume (0-31), bits 8-15 battery (getBatteryLevel), bit 16 valid.
+The ARM9 never waits for an answer.
 
 DSWiFi fixes (prebuilt library, so by --wrap): Wifi_Update() runs with interrupts
 disabled, so the FIFO call can no longer be re-entered by the VBlank or Wi-Fi
@@ -29,13 +23,6 @@ handler = '''
 // HQ2: cached DSi volume/battery for the ARM9 (see tools/prepare_hq2_arm7.py).
 #define FIFO_VOLUME FIFO_USER_08
 static volatile u32 hq2_status;
-static volatile u32 *hq2_beat;
-
-static void beat_address(void *address, void *userdata)
-{
-    (void)userdata;
-    hq2_beat = (volatile u32 *)address;
-}
 
 static void volume_request(u32 value, void *userdata)
 {
@@ -50,15 +37,11 @@ static void volume_request(u32 value, void *userdata)
 // ARM9 heap right after DSWiFi's RX buffer (thread contexts and stacks) and froze
 // or crashed playback after seconds to minutes. Linked with --wrap=Wifi_MACRead.
 void __real_Wifi_MACRead(u16 *dest, u32 MAC_Base, u32 MAC_Offset, int length);
-static volatile u32 hq2_macread_rejected;
 
 void __wrap_Wifi_MACRead(u16 *dest, u32 MAC_Base, u32 MAC_Offset, int length)
 {
     if (length <= 0 || length > 2400)
-    {
-        hq2_macread_rejected++;
         return;
-    }
     __real_Wifi_MACRead(dest, MAC_Base, MAC_Offset, length);
 }
 
@@ -82,17 +65,13 @@ void __wrap_Wifi_Update(void)
 }
 
 // Same guard for TX: a 0 length would again be a 65536-halfword DMA over MAC RAM.
-// Linked with --wrap=Wifi_MACWrite; the count reaches the ARM9 next to the heartbeat.
+// Linked with --wrap=Wifi_MACWrite.
 void __real_Wifi_MACWrite(const u16 *src, u32 MAC_Base, int length);
-static volatile u32 hq2_macwrite_rejected;
 
 void __wrap_Wifi_MACWrite(const u16 *src, u32 MAC_Base, int length)
 {
     if (length <= 0)
-    {
-        hq2_macwrite_rejected++;
         return;
-    }
     __real_Wifi_MACWrite(src, MAC_Base, length);
 }
 
@@ -105,8 +84,7 @@ static void hq2_refresh_status(void)
     u32 volume = i2cReadRegister(I2C_PM, I2CREGPM_VOL) & 0xFF;
     u32 battery = getBatteryLevel() & 0xFF;
     leaveCriticalSection(ime);
-    u32 rejected = hq2_macread_rejected > 0x7FFF ? 0x7FFF : hq2_macread_rejected;
-    hq2_status = volume | (battery << 8) | (1u << 16) | (rejected << 17);
+    hq2_status = volume | (battery << 8) | (1u << 16);
 }
 
 int main(void)
@@ -116,19 +94,12 @@ anchor_fifo = "    installSystemFIFO(); // Sleep mode, storage, firmware...\n"
 anchor_loop = "        swiWaitForVBlank();\n    }\n"
 assert source.count(anchor_main) == 1 and source.count(anchor_fifo) == 1 and source.count(anchor_loop) == 1
 patched = source.replace(anchor_main, handler, 1)
-patched = patched.replace(anchor_fifo, anchor_fifo + "    fifoSetValue32Handler(FIFO_VOLUME, volume_request, 0);\n"
-                          "    fifoSetAddressHandler(FIFO_VOLUME, beat_address, 0);\n", 1)
+patched = patched.replace(anchor_fifo, anchor_fifo + "    fifoSetValue32Handler(FIFO_VOLUME, volume_request, 0);\n", 1)
 patched = patched.replace(anchor_loop, '''        swiWaitForVBlank();
 
-        // Heartbeat for the ARM9 watchdog, in a word the ARM9 gave us.
-        static u32 beat;
-        beat++;
-        if (hq2_beat)
-        {
-            hq2_beat[0] = beat;
-            hq2_beat[1] = hq2_macwrite_rejected;
-        }
-        if (beat % 60 == 1)
+        // Volume and battery, read once a second.
+        static u32 frames;
+        if (frames++ % 60 == 0)
             hq2_refresh_status();
     }
 ''', 1)

@@ -21,12 +21,19 @@ void ui_crash(const char *const *lines, int count);
 void ui_home(const char *host, int port, int pressed);
 int ui_home_hit(int x, int y);  // 1 search, 2 test, 3 server IP, 0 none
 
-#define UI_RESULTS_PER_PAGE 4
-// SEARCH4 title bitmaps wrap at this width; the video length goes to their right.
+#define UI_RESULTS_PER_PAGE 3
+// SEARCH5 title bitmaps wrap at this width; the video length goes to their right.
 #define UI_RESULT_TITLE_W 188
-// durations: seconds per result (0 unknown, -1 live), or NULL.
+// One line with the channel name under each title (SEARCH5).
+#define UI_CHANNEL_W 232
+#define UI_CHANNEL_H 12
+#define UI_CHANNEL_BYTES (UI_CHANNEL_W / 8 * UI_CHANNEL_H)
+#define UI_CHANNEL_LEN 61
+// bitmaps/channel_bitmaps: one per result, or NULL to draw the text instead.
+// durations: seconds per result (0 unknown, -1 live).
 void ui_results(const char *query, int count, int selected, int pressed,
-                const char (*titles)[101], const uint8_t *bitmaps, const int *durations);
+                const char (*titles)[101], const uint8_t *bitmaps, const int *durations,
+                const char (*channels)[UI_CHANNEL_LEN], const uint8_t *channel_bitmaps);
 int ui_results_hit(int x, int y, int selected, int count);  // index, or -1
 
 #define UI_RECENT_MAX 8
@@ -42,8 +49,7 @@ typedef struct {
     const char *title_text;
     int mode;                     // 0 starting, 1 playing, 2 buffering, 3 paused
     unsigned seconds, buffer_ms;
-    unsigned quality, picture_fps, net_kib, decode_ms, late, rebuffers, gaps, stack_kib;
-    unsigned net_stack_kib[2];    // DSWiFi update thread, lwIP tcpip thread
+    unsigned quality, picture_fps, net_kib, decode_ms, late, rebuffers, gaps;
     int pressed;                  // 1 pause, 2 back
     int show_stats;
     int volume;                   // DSi volume 0-31, -1 unknown

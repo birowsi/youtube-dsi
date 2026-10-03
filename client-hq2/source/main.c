@@ -28,10 +28,12 @@
 static char host[64] = "192.168.0.4", ini_host[64];
 static int port = 8767;
 static char error_text[440];
-#define MAX_RESULTS 24  // SEARCH4 sends up to 24
+#define MAX_RESULTS 24  // SEARCH5 sends up to 24
 static char ids[MAX_RESULTS][12], titles[MAX_RESULTS][101];
 static uint8_t title_bitmaps[MAX_RESULTS][UI_TITLE_BYTES];
 static int durations[MAX_RESULTS];  // seconds, 0 unknown, -1 live
+static char channels[MAX_RESULTS][UI_CHANNEL_LEN];
+static uint8_t channel_bitmaps[MAX_RESULTS][UI_CHANNEL_BYTES];
 static int results, selected, have_bitmaps;
 // Earlier searches, newest first, kept on the SD card.
 #define RECENT_FILE "/youtube-dsi-recent.txt"
@@ -237,17 +239,13 @@ static int connect_pc(const char *title) {
 // The DSi's whole network sometimes stops during long playback (no ping, no new
 // connection) while the ARM7 still runs. Dropping the association and joining the
 // access point again brings it back; the stream then resumes where it stopped.
-static unsigned wifi_resets;
 static char wifi_before_reset[120];
 static int reconnect_wifi(void) {
     int assoc = Wifi_AssocStatus();
-    snprintf(wifi_before_reset, sizeof(wifi_before_reset), "Wi-Fi was %s, rx %lu tx %lu lost %lu rej %lu dma %u",
+    snprintf(wifi_before_reset, sizeof(wifi_before_reset), "Wi-Fi was %s, rx %lu tx %lu lost %lu rej %lu",
              assoc >= 0 && assoc <= ASSOCSTATUS_CANNOTCONNECT ? ASSOCSTATUS_STRINGS[assoc] : "?",
              (unsigned long)Wifi_GetStats(WSTAT_RXPACKETS), (unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
-             (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST), (unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED),
-             hq_wifi_dma_refused());
-    wifi_resets++;
-    hq_wifi_resets = wifi_resets;
+             (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST), (unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED));
     ui_status("Now Playing", "Reconnecting Wi-Fi...", wifi_before_reset, NULL);
     Wifi_DisconnectAP();
     for (unsigned frames = 0; frames < 60; frames++) tick();
@@ -324,26 +322,31 @@ static void server_error(const char *line) {
 
 static int search(const char *query) {
     char command[264], line[440] = "";
-    snprintf(command, sizeof(command), "SEARCH4 %s\n", query);
+    snprintf(command, sizeof(command), "SEARCH5 %s\n", query);
     int fd = open_request(command, "Searching");
     if (fd < 0) return 0;
     ui_status("Searching", "Searching YouTube...", query, "B: Cancel");
-    int ok = receive_line(fd, line, sizeof(line)), w = 0, h = 0;
+    int ok = receive_line(fd, line, sizeof(line)), w = 0, h = 0, cw = 0, ch = 0;
     have_bitmaps = 0;
-    if (ok && sscanf(line, "OK %d %d %d", &results, &w, &h) >= 1 && results >= 0 && results <= MAX_RESULTS) {
+    if (ok && sscanf(line, "OK %d %d %d %d %d", &results, &w, &h, &cw, &ch) >= 1 &&
+        results >= 0 && results <= MAX_RESULTS) {
         for (int i = 0; i < results; i++) {
             if (!receive_line(fd, line, sizeof(line))) { ok = 0; break; }
-            // id <TAB> length in seconds <TAB> title
-            char *tab = strchr(line, '\t'), *tab2 = tab ? strchr(tab + 1, '\t') : NULL;
-            if (!tab || tab - line != 11 || !tab2) { ok = 0; break; }
-            *tab = 0;
-            memcpy(ids[i], line, 11); ids[i][11] = 0;
-            durations[i] = atoi(tab + 1);
-            snprintf(titles[i], sizeof(titles[i]), "%.100s", tab2 + 1);
+            // id <TAB> length in seconds <TAB> channel <TAB> title
+            char *f[4] = {line};
+            for (int k = 1; k < 4 && f[k - 1]; k++)
+                if ((f[k] = strchr(f[k - 1], '\t'))) *f[k]++ = 0;
+            if (!f[3] || strlen(line) != 11) { ok = 0; break; }
+            memcpy(ids[i], line, 12);
+            durations[i] = atoi(f[1]);
+            snprintf(channels[i], sizeof(channels[i]), "%.60s", f[2]);
+            snprintf(titles[i], sizeof(titles[i]), "%.100s", f[3]);
         }
-        if (ok && w == UI_TITLE_W && h == UI_TITLE_H) {
+        // Per result: the title bitmap, then the channel line.
+        if (ok && w == UI_TITLE_W && h == UI_TITLE_H && cw == UI_CHANNEL_W && ch == UI_CHANNEL_H) {
             for (int i = 0; i < results && ok; i++)
-                ok = receive_bytes(fd, title_bitmaps[i], UI_TITLE_BYTES);
+                ok = receive_bytes(fd, title_bitmaps[i], UI_TITLE_BYTES) &&
+                     receive_bytes(fd, channel_bitmaps[i], UI_CHANNEL_BYTES);
             have_bitmaps = ok;
         }
     } else if (ok) {
@@ -387,9 +390,7 @@ static int playback(int index) {
                              index >= 0 && have_bitmaps ? title_bitmaps[index] : NULL,
                              index >= 0 ? titles[index] : "Picture + stereo test (440 Hz left, 660 Hz right)",
                              from, duration, &seek_to, seeking);
-        hq_watch_phase(13);
         close(fd);
-        hq_watch_end();
         // After a stall the stream reconnects at the same position, up to 5 times.
         if (ok && seek_to >= 0 && hq_resumed_after_stall && ++resumes > 5) {
             snprintf(error_text, sizeof(error_text), "The stream kept stopping. Check the Wi-Fi and the server.");
@@ -420,7 +421,8 @@ static void home_redraw(int pressed) { ui_home(host, port, pressed); }
 static int result_hit(int x, int y) { return ui_results_hit(x, y, selected, results) + 1; }
 static char last_query[240];
 static void results_redraw(int pressed) {
-    ui_results(last_query, results, selected, pressed - 1, titles, have_bitmaps ? title_bitmaps[0] : NULL, durations);
+    ui_results(last_query, results, selected, pressed - 1, titles, have_bitmaps ? title_bitmaps[0] : NULL, durations,
+               channels, have_bitmaps ? channel_bitmaps[0] : NULL);
 }
 
 static void results_loop(void) {

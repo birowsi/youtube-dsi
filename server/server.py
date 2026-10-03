@@ -64,7 +64,8 @@ def search(query, count=8):
         data = ydl.extract_info(f"ytsearch{count}:" + query, download=False)
     # duration: seconds, 0 unknown, -1 live stream
     results = [{"id": entry["id"], "title": entry.get("title", entry["id"]),
-                "duration": -1 if entry.get("live_status") == "is_live" else int(entry.get("duration") or 0)}
+                "duration": -1 if entry.get("live_status") == "is_live" else int(entry.get("duration") or 0),
+                "channel": entry.get("channel") or entry.get("uploader") or ""}
                for entry in data.get("entries", []) if entry and re.fullmatch(r"[\w-]{11}", entry.get("id", ""))]
     state(state="ready", results=results)
     return results

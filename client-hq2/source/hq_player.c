@@ -47,128 +47,35 @@ static unsigned volume_asked;
 // in its main loop. Nothing waits for it: a blocking getBatteryLevel() in the UI was
 // where playback hung once the ARM7/FIFO stalled.
 u32 hq_battery_raw=0xFFFFFFFFu;
-static unsigned macread_rejected;  // unsafe DSWiFi DMA lengths the ARM7 refused
-// Incremented by the ARM7 main loop every VBlank (address sent once); alone in a cache line.
-// Word 1: unsafe Wifi_MACWrite() lengths the ARM7 refused.
-static volatile uint32_t arm7_beat[8] __attribute__((aligned(32)));
-static int arm7_beat_sent;
-static uint32_t arm7_beat_read(void) { DC_InvalidateRange((void*)arm7_beat,32);return arm7_beat[0]; }
-static unsigned macwrite_rejected(void) { DC_InvalidateRange((void*)arm7_beat,32);return arm7_beat[1]; }
-unsigned hq_wifi_dma_refused(void) { return macread_rejected+macwrite_rejected(); }
 static void volume_poll(unsigned now) {
     while(fifoCheckValue32(FIFO_VOLUME)) {
         u32 value=fifoGetValue32(FIFO_VOLUME);
         if(value&(1u<<16)) {
             volume_level=(value&0xFF)<=31?(int)(value&0xFF):-1;
             hq_battery_raw=(value>>8)&0xFF;
-            macread_rejected=value>>17;
         }
     }
-    if(!arm7_beat_sent) { arm7_beat_sent=1;fifoSendAddress(FIFO_VOLUME,(void*)arm7_beat); }
     if(now-volume_asked>=500) { volume_asked=now;fifoSendValue32(FIFO_VOLUME,0); }
 }
 void hq_status_poll(void) { volume_poll(sys_now()); }
-// Receiver stack: a static block painted with a pattern, so the deepest use can be
-// measured on hardware, with an untouched guard zone below it to catch an overflow.
-#define RX_STACK (64*1024)
-#define RX_GUARD 1024
-#define RX_PAINT 0xA5A5A5A5u
-static uint32_t rx_stack[(RX_GUARD+RX_STACK)/4] __attribute__((aligned(8)));
-static unsigned rx_peak, rx_guard_word;
-static uint32_t rx_guard_value;
-static void rx_stack_check(void) {
-    unsigned guard=RX_GUARD/4,i;
-    for(i=0;i<guard;i++) if(rx_stack[i]!=RX_PAINT) { rx_guard_word=i+1;rx_guard_value=rx_stack[i];break; }
-    for(i=guard;i<sizeof(rx_stack)/4 && rx_stack[i]==RX_PAINT;i++);
-    unsigned used=sizeof(rx_stack)-i*4;
-    if(used>rx_peak)rx_peak=used;
-}
-// Watchdog (diagnostic): the VBlank IRQ checks that the playback loop still runs.
-// A hang with interrupts alive (sound fades to silence) shows where each thread was.
-static volatile unsigned main_beat, main_phase, rx_beat, rx_phase, rx_sub;
-static volatile int watch_on;
-static cothread_t rx_thread;
-void hq_watch_phase(unsigned phase) { main_phase=phase; }
+// Static receiver stack: lwIP runs its receive path on the caller's stack.
+#define RX_STACK (32*1024)
+static uint32_t rx_stack[RX_STACK/4] __attribute__((aligned(8)));
 int hq_auto_resume=1, hq_resumed_after_stall;
-unsigned hq_wifi_resets;
-void hq_watch_end(void) { watch_on=0; }
-static unsigned watch_last, watch_count, watch_stage, arm7_beat_first;
-static unsigned snap[12];
-static void watchdog_report(int arm7_answered) {
-    static char lines[12][48];
-    const char *list[12];
-    int n=0;
-    snprintf(lines[n++],48,"HQ2 stalled - please photograph");
-    snprintf(lines[n++],48,"main phase %u beat %u",snap[0],snap[1]);
-    snprintf(lines[n++],48,"rx phase %u.%u beat %u",snap[3],snap[4],snap[5]);
-    snprintf(lines[n++],48,"received %u released %u",snap[6],snap[7]);
-    snprintf(lines[n++],48,"audio %u active %u eof %u fail %u",snap[8],snap[9],snap[10],snap[11]);
-    snprintf(lines[n++],48,"ARM7 answers: %s",arm7_answered<0?"checking...":arm7_answered?"yes":"NO");
-    if(arm7_answered>=0)
-        snprintf(lines[n++],48,"ARM7 main loop: %s",arm7_beat_read()!=arm7_beat_first?"running":"STOPPED");
-    snprintf(lines[n++],48,"rx stack peak %u",rx_peak);
-    { unsigned f=0;uint32_t v=0;unsigned bad=hq_canary_check(&f,&v);
-      snprintf(lines[n++],48,"canary %u +%u=%08lX",bad,f*4,(unsigned long)v); }
-    snprintf(lines[n++],48,"net stacks %u %u %u (%d)",hq_net_stack_peak(0),hq_net_stack_peak(1),
-             hq_net_stack_peak(2),hq_net_stack_count());
-    snprintf(lines[n++],48,"threads %08X %08X",(unsigned)hq_thread_id(0),(unsigned)hq_thread_id(1));
-    snprintf(lines[n++],48,"        %08X rx %08X",(unsigned)hq_thread_id(2),(unsigned)rx_thread);
-    for(int i=0;i<n;i++)list[i]=lines[i];
-    ui_crash(list,n);
-}
-static void watchdog(void) {
-    if(!watch_on || watch_stage>=2)return;
-    if(main_beat!=watch_last) { watch_last=main_beat;watch_count=0;watch_stage=0;return; }
-    watch_count++;
-    if(watch_count==180) {
-        arm7_beat_first=arm7_beat_read();
-        unsigned values[12]={main_phase,main_beat,0,rx_phase,rx_sub,rx_beat,
-                             received,released,audio_count,audio_active,eof,failed};
-        memcpy(snap,values,sizeof(snap));
-        // Ask the ARM7 something it answers from its FIFO handler (the volume).
-        while(fifoCheckValue32(FIFO_VOLUME))fifoGetValue32(FIFO_VOLUME);
-        fifoSendValue32(FIFO_VOLUME,0);
-        watchdog_report(-1);
-        watch_stage=1;
-    } else if(watch_stage==1 && watch_count==240) {
-        watchdog_report(fifoCheckValue32(FIFO_VOLUME));
-        watch_stage=2;
-    }
-}
-// Crash screen: no stdio, no heap, no FIFO (the heap may be the damaged part).
-static char crash_lines[17][48];
-static int crash_count;
-static void crash_dump(const char *name, uint32_t address) {
-    if(address<0x02000000 || address>=0x03000000) {
-        snprintf(crash_lines[crash_count++],48,"%s %08lX (not RAM)",name,(unsigned long)address);return;
-    }
-    const uint32_t *p=(const uint32_t *)((address&~3u)-16);
-    snprintf(crash_lines[crash_count++],48,"%s:",name);
-    for(int row=0;row<4;row++,p+=3)
-        snprintf(crash_lines[crash_count++],48,"%08lX %08lX %08lX %08lX",(unsigned long)(uintptr_t)p,
-                 (unsigned long)p[0],(unsigned long)p[1],(unsigned long)p[2]);
-}
+// Exception screen: no stdio, no heap, no FIFO (the heap may be the damaged part).
+static char crash_lines[8][48];
 void hq_crash_handler(void) {
     const uint32_t *r=(const uint32_t *)exceptionRegisters;
-    // Show something at once, before formatting anything.
-    { static const char *const first[]={"HQ2 crash..."}; ui_crash(first,1); }
-    crash_count=0;
-    snprintf(crash_lines[crash_count++],48,"HQ2 crash - please photograph");
-    snprintf(crash_lines[crash_count++],48,"pc %08lX lr %08lX sp %08lX",
+    int n=0;
+    snprintf(crash_lines[n++],48,"HQ2 crash - please photograph");
+    snprintf(crash_lines[n++],48,"pc %08lX lr %08lX sp %08lX",
              (unsigned long)r[15],(unsigned long)r[14],(unsigned long)r[13]);
-    for(int i=0;i<8;i+=4)
-        snprintf(crash_lines[crash_count++],48,"r%d-%d %08lX %08lX %08lX %08lX",i,i+3,
+    for(int i=0;i<12;i+=4)
+        snprintf(crash_lines[n++],48,"r%d-%d %08lX %08lX %08lX %08lX",i,i+3,
                  (unsigned long)r[i],(unsigned long)r[i+1],(unsigned long)r[i+2],(unsigned long)r[i+3]);
-    snprintf(crash_lines[crash_count++],48,"rx peak %u guard %u %08lX",rx_peak,rx_guard_word,(unsigned long)rx_guard_value);
-    { unsigned f=0;uint32_t v=0;unsigned bad=hq_canary_check(&f,&v);
-      snprintf(crash_lines[crash_count++],48,"canary %u +%u=%08lX wd %08lX",bad,f*4,(unsigned long)v,(unsigned long)hq_canary_owner()); }
-    snprintf(crash_lines[crash_count++],48,"net stacks %u %u %u (%d)",hq_net_stack_peak(0),hq_net_stack_peak(1),
-             hq_net_stack_peak(2),hq_net_stack_count());
-    crash_dump("r4",r[4]);
-    crash_dump("r0",r[0]);
-    const char *lines[17];
-    for(int i=0;i<crash_count;i++)lines[i]=crash_lines[i];
-    ui_crash(lines,crash_count);
+    const char *lines[8];
+    for(int i=0;i<n;i++)lines[i]=crash_lines[i];
+    ui_crash(lines,n);
     while(1);
 }
 // Retained telemetry for reproducible emulator/hardware playback checks.
@@ -190,9 +97,7 @@ void hq_video_reset(void) {
     front_page=0;
     bgSetMapBase(video_bg,0);
 }
-static void watchdog(void);
 static void present_frame(void) {
-    watchdog();
     if(pending_page>=0) {
         bgSetMapBase(video_bg,pending_page*8);
         front_page=pending_page;pending_page=-1;
@@ -213,7 +118,6 @@ void hq_video_init(void) {
 static int read_exact(void *destination,unsigned size) {
     unsigned done=0, last=sys_now();
     while(done<size && !stop_reader) {
-        rx_sub=1;
         int n=recv(socket_fd,(uint8_t*)destination+done,size-done,0);
         if(n>0) { done+=n;total_bytes+=n;last=sys_now();continue; }
         if(!n)return done ? -1 : 0;
@@ -222,9 +126,7 @@ static int read_exact(void *destination,unsigned size) {
         // the socket signals, so with no data it never returned (B then hung) and a
         // missed wake-up could leave data unread. The ARM7 sends a FIFO message for
         // every received packet and at least once per frame, so wake on those.
-        rx_sub=2;
         cothread_yield_irq(IRQ_RECV_FIFO);
-        rx_sub=3;
         if(sys_now()-last>15000)return -1;
     }
     return done==size ? 1 : -1;
@@ -247,12 +149,11 @@ static int receiver(void *unused) {
     static uint8_t encoded[SAMPLES+8];
     static int16_t pcm[SAMPLES*2];
     while(!stop_reader) {
-        rx_beat++;rx_phase=1;
+        
         while(!stop_reader && (received-released>=SLOTS || audio_count>AUDIO_SIZE-PCM_BYTES))
             cothread_yield_irq(IRQ_VBLANK);
         if(stop_reader)break;
         uint32_t chunk[4];
-        rx_phase=2;
         int result=read_exact(chunk,sizeof(chunk));
         if(!result) { eof=1;break; }
         if(result<0) { if(!stop_reader)failed=1;break; }
@@ -260,23 +161,18 @@ static int receiver(void *unused) {
         if(chunk[0]!=received || (!chunk[1] && !received) || chunk[1]>JPEG_MAX ||
            chunk[2]!=sizeof(encoded) || chunk[3]>100) { failed=1;break; }
         VideoPacket *packet=&packets[received%SLOTS];
-        rx_phase=3;
-        if((chunk[1] && read_exact(packet->jpeg,chunk[1])<1) || (rx_phase=4,read_exact(encoded,sizeof(encoded))<1)) {
+        if((chunk[1] && read_exact(packet->jpeg,chunk[1])<1) || read_exact(encoded,sizeof(encoded))<1) {
             if(!stop_reader)failed=1;
             break;
         }
-        rx_phase=5;
         if(hq_decode_ima(encoded,sizeof(encoded),pcm,SAMPLES)!=SAMPLES) { failed=1;break; }
         packet->length=chunk[1];packet->quality=chunk[3];
-        rx_phase=6;
         put_audio(pcm);
         __asm__ volatile("" ::: "memory");
         received++;
         // Let the renderer and lwIP run even during a large buffered burst.
-        rx_phase=7;
         cothread_yield();
     }
-    rx_phase=8;
     reader_done=1;
     return 0;
 }
@@ -360,9 +256,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
        header[5]!=SAMPLES || header[6]!=2 || header[7]!=1 || header[8]!=1) {
         snprintf(error_text,error_size,"HQ relay/version mismatch");return 0;
     }
-    for(unsigned i=0;i<sizeof(rx_stack)/4;i++)rx_stack[i]=RX_PAINT;
-    rx_guard_word=0;
-    if((rx_thread=cothread_create_manual(receiver,NULL,rx_stack+RX_GUARD/4,RX_STACK,COTHREAD_DETACHED))<0) {
+    if(cothread_create_manual(receiver,NULL,rx_stack,RX_STACK,COTHREAD_DETACHED)<0) {
         snprintf(error_text,error_size,"Can't start stream receiver");return 0;
     }
     mm_stream stream={.sampling_rate=RATE,.buffer_length=2048,.callback=fill_audio,
@@ -371,16 +265,14 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
     unsigned shown=~0u,decoded=0,dropped=0,rebuffer_count=0,decode_ms=0,decode_max=0;
     unsigned last_ui=0,last_feedback=0,last_bytes=0,net_rate=0,tail_start=0;
     unsigned late_reported=0,decode_sum=0,decode_n=0,decode_avg=0,pictures_mark=0,picture_fps=0;
-    char feedback[200];unsigned feedback_size=0,feedback_sent=0;
+    char feedback[48];unsigned feedback_size=0,feedback_sent=0;
     PlayerView view={.title_bitmap=title_bitmap,.title_text=title_text,.volume=-1,
                      .duration=duration,.seek_target=-1,.seconds=(unsigned)start};
     static int show_stats;
     int ui_mode=-1,ui_pressed=0,toggle=0;
     if(!resumed)hq_video_reset();
-    watch_last=main_beat;watch_count=watch_stage=0;watch_on=1;
     while(1) {
         int drew=0;
-        main_beat++;main_phase=1;
         scanKeys();unsigned now=sys_now();
         // With the lid closed, keep the sound going and skip picture decoding.
         int lid=hq_lid_update();
@@ -388,20 +280,16 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
 #ifdef HQ2_CRASH_TEST
         if(keysDown()&KEY_SELECT)__builtin_trap();   // emulator check of the crash screen
 #endif
-#ifdef HQ2_HANG_TEST
-        if(keysDown()&KEY_SELECT)for(;;);   // emulator check of the watchdog
-#endif
         if(total_bytes!=stall_bytes) { stall_bytes=total_bytes;stall_since=now; }
         if(now-last_check>=500) {
-            last_check=now;rx_stack_check();
+            last_check=now;
             // No data for 5 s while playing: show the Wi-Fi state and counters on screen.
             if(started && !paused && !eof && now-stall_since>=5000) {
                 int assoc=Wifi_AssocStatus();
-                snprintf(stall_text,sizeof(stall_text),"No data %us  Wi-Fi %s  rx %lu tx %lu lost %lu rej %lu dma %u",
+                snprintf(stall_text,sizeof(stall_text),"No data %us  Wi-Fi %s  rx %lu tx %lu lost %lu rej %lu",
                          (now-stall_since)/1000,assoc>=0 && assoc<=ASSOCSTATUS_CANNOTCONNECT?ASSOCSTATUS_STRINGS[assoc]:"?",
                          (unsigned long)Wifi_GetStats(WSTAT_RXPACKETS),(unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
-                         (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED),
-                         hq_wifi_dma_refused());
+                         (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED));
                 view.notice=stall_text;last_ui=0;
                 if(now-stall_since>=8000 && duration>0 && hq_auto_resume) {
                     *seek_to=start+(int)(played_samples/RATE);
@@ -409,18 +297,6 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
                     break;
                 }
             } else if(view.notice) { view.notice=NULL;last_ui=0; }
-            unsigned canary_first=0;uint32_t canary_value=0;
-            unsigned canary_bad=hq_canary_check(&canary_first,&canary_value);
-            if(canary_bad) {
-                snprintf(error_text,error_size,"Memory written past the Wi-Fi buffer (%08lX): %u words, first +%u = %08lX",
-                         (unsigned long)hq_canary_owner(),canary_bad,canary_first*4,(unsigned long)canary_value);
-                failed=1;break;
-            }
-            if(rx_guard_word) {
-                snprintf(error_text,error_size,"Receiver stack overflow: guard word %u = %08lX (peak %u bytes)",
-                         rx_guard_word,(unsigned long)rx_guard_value,rx_peak);
-                failed=1;break;
-            }
         }
         unsigned down=keysDown(),held=keysHeld();
         touchPosition t;touchRead(&t);
@@ -482,7 +358,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
         unsigned target=started ? RATE*4*5/2 : resumed ? RATE*4*3/2 : RATE*4*3;
         if(!paused && !audio_active && (audio_count>=target || (eof && audio_count))) {
             audio_active=1;rebuffer=0;
-            if(!started) { started=1;main_phase=2;mmStreamOpen(&stream); }
+            if(!started) { started=1;mmStreamOpen(&stream); }
         }
         if(started && !paused && audio_active && received) {
             unsigned current=(played_samples>stream.buffer_length ?
@@ -496,7 +372,6 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
                 unsigned target=current;
                 while(target!=shown && target && !packets[target%SLOTS].length)target--;
                 if(packets[target%SLOTS].length && target!=shown) {
-                    main_phase=3;
                     if(!draw_packet(&packets[target%SLOTS], &decode_ms)) { failed=1;hq_stats[14]++;break; }
                     if(decode_ms>decode_max)decode_max=decode_ms;
                     decode_sum+=decode_ms;decode_n++;
@@ -523,21 +398,9 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             // A trailing 1 asks the relay to stop sending pictures while the lid is closed.
             feedback_size=snprintf(feedback,sizeof(feedback),lid?"BUF %u %u %u %u 1\n":"BUF %u %u %u %u\n",
                                    buffer_ms,mode,decode_avg,late);
-            // Flight recorder (diagnostic): the relay logs this line, so the second before
-            // a hang is on record even when the DSi can no longer show anything.
-            feedback_size+=snprintf(feedback+feedback_size,sizeof(feedback)-feedback_size,
-                "DBG a7 %lu fifo %04X main %u/%u rx %u.%u/%u got %u rel %u aud %u st %u/%u/%u cn %u wd %08lX mr %u mw %u wifi %d rx %lu tx %lu lost %lu rej %lu resets %u\n",
-                (unsigned long)arm7_beat_read(),(unsigned)REG_IPC_FIFO_CR,main_phase,main_beat,rx_phase,rx_sub,rx_beat,
-                received,released,audio_count,hq_net_stack_peak(1),hq_net_stack_peak(2),rx_peak,
-                hq_canary_check(&(unsigned){0},&(uint32_t){0}),(unsigned long)hq_canary_owner(),macread_rejected,
-                macwrite_rejected(),
-                Wifi_AssocStatus(),(unsigned long)Wifi_GetStats(WSTAT_RXPACKETS),(unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
-                (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED),
-                hq_wifi_resets);
             feedback_sent=0;last_feedback=now;
         }
         if(!eof && feedback_sent<feedback_size) {
-            main_phase=4;
             int n=send(fd,feedback+feedback_sent,feedback_size-feedback_sent,0);
             if(n>0)feedback_sent+=n;
         }
@@ -552,11 +415,7 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             view.quality=hq_stats[11];view.picture_fps=picture_fps;view.net_kib=net_rate;
             view.decode_ms=decode_avg;view.late=dropped;view.rebuffers=rebuffer_count;
             view.gaps=starvation_count;view.pressed=ui_pressed;view.show_stats=show_stats;
-            view.volume=volume_level;view.stack_kib=(rx_peak+1023)/1024;
-            // Tracked threads: 0 Wi-Fi connect (ended), 1 DSWiFi update, 2 lwIP tcpip.
-            if(view.show_stats)
-                for(int i=0;i<2;i++)view.net_stack_kib[i]=(hq_net_stack_peak(i+1)+1023)/1024;
-            main_phase=5;
+            view.volume=volume_level;
             ui_player(&view);
         }
         hq_stats[1]=received;hq_stats[2]=played_samples;hq_stats[3]=decoded;
@@ -564,28 +423,18 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
         hq_stats[7]=decode_ms;hq_stats[8]=decode_max;hq_stats[9]=dropped;
         hq_stats[10]=total_bytes;hq_stats[12]=mode;hq_stats[13]=net_rate;
         hq_stats[15]=shown;
-        main_phase=6;
         if(drew || (started && !paused && audio_active))cothread_yield();
         else cothread_yield_irq(IRQ_VBLANK);
     }
-    // The watchdog stays on until the caller has closed the socket (hq_watch_end):
-    // a hang while leaving playback shows which step it was.
     audio_active=0;
-    main_phase=10;
     if(started)mmStreamClose();
     stop_reader=1;
-    main_phase=11;
     while(!reader_done)cothread_yield_irq(IRQ_VBLANK);
-    main_phase=12;
     if(*seek_to<0)hq_video_reset();
-    if(failed && !rx_guard_word) {
+    if(failed && !error_text[0]) {
         int assoc=Wifi_AssocStatus();
-        snprintf(error_text,error_size,"Stream interrupted. Wi-Fi %s, rx %lu tx %lu, lost %lu rej %lu, dma mr %u mw %u.",
-                 assoc>=0 && assoc<=ASSOCSTATUS_CANNOTCONNECT?ASSOCSTATUS_STRINGS[assoc]:"?",
-                 (unsigned long)Wifi_GetStats(WSTAT_RXPACKETS),(unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
-                 (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED),
-                 macread_rejected,macwrite_rejected());
-        return 0;
+        snprintf(error_text,error_size,"The stream stopped (Wi-Fi %s). Check the Wi-Fi and the server.",
+                 assoc>=0 && assoc<=ASSOCSTATUS_CANNOTCONNECT?ASSOCSTATUS_STRINGS[assoc]:"?");
     }
     if(failed)return 0;
     return 1;

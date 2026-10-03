@@ -318,9 +318,10 @@ int ui_home_hit(int x, int y) {
 }
 
 #define ROW_Y 20
-#define ROW_H 34
+#define ROW_H 46
 void ui_results(const char *query, int count, int selected, int pressed,
-                const char (*titles)[101], const uint8_t *bitmaps, const int *durations) {
+                const char (*titles)[101], const uint8_t *bitmaps, const int *durations,
+                const char (*channels)[UI_CHANNEL_LEN], const uint8_t *channel_bitmaps) {
     begin();
     int pages = (count + UI_RESULTS_PER_PAGE - 1) / UI_RESULTS_PER_PAGE;
     int page = selected / UI_RESULTS_PER_PAGE;
@@ -339,18 +340,24 @@ void ui_results(const char *query, int count, int selected, int pressed,
         rect(paint, 4, y, 248, ROW_H, push ? CHROME : PAPER);
         outline(paint, 4, y, 248, ROW_H, sel ? ACCENT : RULE);
         if (sel) { outline(paint, 5, y + 1, 246, ROW_H - 2, ACCENT); rect(paint, 4, y, 4, ROW_H, ACCENT); }
-        if (bitmaps) {
-            const uint8_t *b = bitmaps + i * UI_TITLE_BYTES;
-            blit1(paint, 14, y + (one_line(b) ? 12 : 6), b, UI_TITLE_W, UI_TITLE_H, INK);
-        }
-        else text_wrap(paint, 14, y + 5, titles[i], UI_RESULT_TITLE_W, 2, INK);
-        int d = durations ? durations[i] : 0;
+        // Title (one or two lines) with the channel right under it, centred in the row.
+        const uint8_t *b = bitmaps ? bitmaps + i * UI_TITLE_BYTES : NULL;
+        int lines = b && one_line(b) ? 1 : 2;
+        int top = y + (ROW_H - (lines * 12 + 14)) / 2 + 1;
+        if (b) blit1(paint, 14, top, b, UI_TITLE_W, UI_TITLE_H, INK);
+        else text_wrap(paint, 14, top, titles[i], UI_RESULT_TITLE_W, 2, INK);
+        if (channel_bitmaps)
+            blit1(paint, 14, top + lines * 12 + 2, channel_bitmaps + i * UI_CHANNEL_BYTES,
+                  UI_CHANNEL_W, UI_CHANNEL_H, MUTED);
+        else if (channels && channels[i][0])
+            text_fit(paint, 14, top + lines * 12 + 2, channels[i], UI_CHANNEL_W, MUTED);
+        int d = durations[i];
         if (d) {
             char length[32];
             if (d < 0) snprintf(length, sizeof(length), "LIVE");
             else if (d >= 3600) snprintf(length, sizeof(length), "%d:%02d:%02d", d / 3600, d / 60 % 60, d % 60);
             else snprintf(length, sizeof(length), "%d:%02d", d / 60, d % 60);
-            text_at(paint, 246 - text_width(length), y + 12, length, d < 0 ? WARNING : MUTED, 1);
+            text_at(paint, 246 - text_width(length), top, length, d < 0 ? WARNING : MUTED, 1);
         }
     }
     footer("A: Play   B: Back   Up/Down: Select", pages > 1 ? "L / R: Page   Tap a title to play" : "Tap a title to play");
@@ -716,9 +723,8 @@ void ui_player(const PlayerView *v) {
         snprintf(line, sizeof(line), "Picture %u fps   Quality %u   Wi-Fi %u KB/s",
                  v->picture_fps, v->quality, v->net_kib);
         text_at(paint, 7, 141, line, MUTED, 1);
-        snprintf(line, sizeof(line), "Dec %ums  Late %u  Wait %u  Gaps %u  Stk %u/%u/%uK",
-                 v->decode_ms, v->late, v->rebuffers, v->gaps, v->stack_kib,
-                 v->net_stack_kib[0], v->net_stack_kib[1]);
+        snprintf(line, sizeof(line), "Decode %ums   Late %u   Waits %u   Gaps %u",
+                 v->decode_ms, v->late, v->rebuffers, v->gaps);
         text_at(paint, 7, 152, line, v->late || v->gaps ? WARNING : MUTED, 1);
     } else {
         if (v->notice) {

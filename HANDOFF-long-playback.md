@@ -60,7 +60,7 @@
   - 실기 시험: `dumps/20261003-205841`에서 약 98KiB/s로 12분 넘게 재생했고 `mr`·`mw`·`resets`·`rej`·`lost`가 모두 0이었다.
 - `eac9e94`의 자동 복구(같은 위치로 다시 연결, Wi-Fi 재접속)는 안전장치로 그대로 둔다. 실기에서 재접속 경로가 실행된 적은 아직 없다.
 - S8 서버는 최신 상태다(`server_quality.py`, `server.py` 한국어 설정). 덤프 기록이 켜져 있다.
-- 진단 장치(지금 ROM에 들어 있음)
+- 진단 장치(2026-10-04 11차 변경에서 정리함. 다시 필요하면 커밋 `11774f8` 이전 코드를 참고)
   - 오류 화면: stdio·힙을 쓰지 않음. r0/r4 주변 메모리, 감시 영역, 스레드 스택 최대 사용량 표시
   - 워치독: VBlank 인터럽트에서 동작. 메인/수신 단계, ARM7 생존, FIFO 응답 표시
   - 블랙박스: 매초 `DBG ...` 줄을 서버로 보내고, 서버가 `.tsv`의 `dsi_debug` 칸에 기록
@@ -70,7 +70,7 @@
 
 1. 몇 번 더 장시간 재생(60fps 영상 포함)해서 확인한다. 예전에는 길어도 6분 안에 끊겼다.
    - 다시 끊기면 화면·오류 메시지의 `dma` 값을 본다. 0보다 크면 다른 경합 경로가 남아 있다는 뜻이다.
-2. 확인이 끝나면 진단 코드를 정리한다(워치독, 블랙박스, 감시 영역, 스택 측정, 서버 덤프).
+2. ~~진단 코드 정리~~ 완료(11차 변경). 서버 덤프 `YTDSI_DUMP`는 선택 기능으로 남겨 두고 S8에서는 꺼 두었다.
    - DSWiFi 우회 수정(`--wrap=Wifi_Update`, `Wifi_MACRead`/`Wifi_MACWrite` 길이 검사)은 남긴다.
    - 32KB 스레드 스택(`--wrap=cothread_create`)과 서버 `Pacer`는 해롭지 않으니 남겨도 된다.
 3. DSWiFi 상류(BlocksDS)에 알릴 만한 버그다: ARM7 FIFO 처리기에서 `Wifi_Update()` 재진입,
@@ -79,7 +79,7 @@
 
 ## 6. 관련 파일
 
-- `client-hq2/source/hq_player.c`: 재생 루프, 수신 스레드, 진단(오류 화면, 워치독, 블랙박스)
+- `client-hq2/source/hq_player.c`: 재생 루프, 수신 스레드, 예외 화면
 - `client-hq2/source/net_stacks.c`: `cothread_create`/`aligned_alloc` 래퍼(32KB 스택, 감시 영역)
 - `client-hq2/source/main.c`: 연결, 자동 복구, Wi-Fi 재접속
 - `tools/prepare_hq2_arm7.py`: HQ2 전용 ARM7 생성(볼륨·배터리 캐시, 생존 신호, `Wifi_MACRead` 길이 검사)
