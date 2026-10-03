@@ -86,6 +86,7 @@ static volatile unsigned main_beat, main_phase, rx_beat, rx_phase, rx_sub;
 static volatile int watch_on;
 static cothread_t rx_thread;
 void hq_watch_phase(unsigned phase) { main_phase=phase; }
+int hq_auto_resume=1, hq_resumed_after_stall;
 void hq_watch_end(void) { watch_on=0; }
 static unsigned watch_last, watch_count, watch_stage, arm7_beat_first;
 static unsigned snap[12];
@@ -339,6 +340,7 @@ static int draw_packet(VideoPacket *packet, unsigned *decode_ms) {
 int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,const char *title_text,
                 int start,int duration,int *seek_to,int resumed) {
     *seek_to=-1;
+    hq_resumed_after_stall=0;
     int seek_target=-1,scrubbing=0;unsigned last_check=0;
     static char stall_text[96];
     unsigned stall_bytes=0,stall_since=sys_now();
@@ -396,6 +398,11 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
                          (unsigned long)Wifi_GetStats(WSTAT_RXPACKETS),(unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
                          (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED));
                 view.notice=stall_text;last_ui=0;
+                if(now-stall_since>=8000 && duration>0 && hq_auto_resume) {
+                    *seek_to=start+(int)(played_samples/RATE);
+                    hq_resumed_after_stall=1;
+                    break;
+                }
             } else if(view.notice) { view.notice=NULL;last_ui=0; }
             unsigned canary_first=0;uint32_t canary_value=0;
             unsigned canary_bad=hq_canary_check(&canary_first,&canary_value);
@@ -564,7 +571,15 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
     while(!reader_done)cothread_yield_irq(IRQ_VBLANK);
     main_phase=12;
     if(*seek_to<0)hq_video_reset();
-    if(failed && !rx_guard_word) { snprintf(error_text,error_size,"HQ stream interrupted. Check relay log.");return 0; }
+    if(failed && !rx_guard_word) {
+        int assoc=Wifi_AssocStatus();
+        snprintf(error_text,error_size,"Stream interrupted. Wi-Fi %s, rx %lu tx %lu, lost %lu rej %lu, guard %u.",
+                 assoc>=0 && assoc<=ASSOCSTATUS_CANNOTCONNECT?ASSOCSTATUS_STRINGS[assoc]:"?",
+                 (unsigned long)Wifi_GetStats(WSTAT_RXPACKETS),(unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
+                 (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED),
+                 macread_rejected);
+        return 0;
+    }
     if(failed)return 0;
     return 1;
 }

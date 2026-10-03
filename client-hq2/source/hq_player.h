@@ -10,6 +10,9 @@ void hq_status_poll(void);
 // Watchdog phases for the caller's part of leaving playback; hq_watch_end() after close().
 void hq_watch_phase(unsigned phase);
 void hq_watch_end(void);
+// Auto-resume: when set, a stream that gets no data for 8 s returns with *seek_to at
+// the current position and hq_resumed_after_stall=1, so the caller reconnects.
+extern int hq_auto_resume, hq_resumed_after_stall;
 extern u32 hq_battery_raw;   // getBatteryLevel() value from the ARM7, 0xFFFFFFFF unknown
 // Crash screen that never dereferences the crashed stack; shows memory around r0/r4.
 void hq_crash_handler(void);

@@ -174,8 +174,25 @@ static int connect_pc(const char *title) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) { snprintf(error_text, sizeof(error_text), "socket error %d", errno); return -2; }
     if (!quiet) ui_status(title, "Connecting to the server...", host, "B: Cancel");
-    // libnds/lwIP socket operations yield internally while waiting.
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) { close(fd); return -1; }
+    // Non-blocking connect polled every frame, with a time limit: a blocking connect
+    // never returned once the DSi's network had stopped.
+    int nonblock = 1;
+    ioctl(fd, FIONBIO, &nonblock);
+    int result = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
+    if (result < 0 && errno != EINPROGRESS && errno != EWOULDBLOCK && errno != EALREADY) { close(fd); return -1; }
+    for (unsigned frames = 0; result < 0; frames++) {
+        fd_set writable; FD_ZERO(&writable); FD_SET(fd, &writable);
+        struct timeval now = {0};
+        if (select(fd + 1, NULL, &writable, NULL, &now) > 0) {
+            int error = 0; socklen_t size = sizeof(error);
+            if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &size) < 0 || error) { close(fd); return -1; }
+            break;
+        }
+        if (frames > 8 * 60 || (keysDown() & KEY_B)) { close(fd); return -1; }
+        tick();
+    }
+    nonblock = 0;
+    ioctl(fd, FIONBIO, &nonblock);
     return fd;
 }
 
@@ -271,7 +288,7 @@ static int search(const char *query) {
 }
 
 static int playback(int index) {
-    int start = 0, seeking = 0;
+    int start = 0, seeking = 0, resumes = 0;
     while (1) {
         char command[64], line[440] = "";
         // PLAY4 carries a start position; a seek reconnects from the new position.
@@ -299,7 +316,11 @@ static int playback(int index) {
         hq_watch_phase(13);
         close(fd);
         hq_watch_end();
-        if (ok && seek_to >= 0) { start = seek_to; seeking = 1; continue; }
+        // After a stall the stream reconnects at the same position, up to 5 times.
+        if (ok && seek_to >= 0 && hq_resumed_after_stall && ++resumes > 5) {
+            snprintf(error_text, sizeof(error_text), "The stream kept stopping. Check the Wi-Fi and the server.");
+            ok = 0;
+        } else if (ok && seek_to >= 0) { start = seek_to; seeking = 1; continue; }
         ui_top_splash(host, port);
         return ok;
     }
