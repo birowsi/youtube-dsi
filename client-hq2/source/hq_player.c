@@ -49,9 +49,12 @@ static unsigned volume_asked;
 u32 hq_battery_raw=0xFFFFFFFFu;
 static unsigned macread_rejected;  // unsafe DSWiFi DMA lengths the ARM7 refused
 // Incremented by the ARM7 main loop every VBlank (address sent once); alone in a cache line.
+// Word 1: unsafe Wifi_MACWrite() lengths the ARM7 refused.
 static volatile uint32_t arm7_beat[8] __attribute__((aligned(32)));
 static int arm7_beat_sent;
 static uint32_t arm7_beat_read(void) { DC_InvalidateRange((void*)arm7_beat,32);return arm7_beat[0]; }
+static unsigned macwrite_rejected(void) { DC_InvalidateRange((void*)arm7_beat,32);return arm7_beat[1]; }
+unsigned hq_wifi_dma_refused(void) { return macread_rejected+macwrite_rejected(); }
 static void volume_poll(unsigned now) {
     while(fifoCheckValue32(FIFO_VOLUME)) {
         u32 value=fifoGetValue32(FIFO_VOLUME);
@@ -394,10 +397,11 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             // No data for 5 s while playing: show the Wi-Fi state and counters on screen.
             if(started && !paused && !eof && now-stall_since>=5000) {
                 int assoc=Wifi_AssocStatus();
-                snprintf(stall_text,sizeof(stall_text),"No data %us  Wi-Fi %s  rx %lu tx %lu lost %lu rej %lu",
+                snprintf(stall_text,sizeof(stall_text),"No data %us  Wi-Fi %s  rx %lu tx %lu lost %lu rej %lu dma %u",
                          (now-stall_since)/1000,assoc>=0 && assoc<=ASSOCSTATUS_CANNOTCONNECT?ASSOCSTATUS_STRINGS[assoc]:"?",
                          (unsigned long)Wifi_GetStats(WSTAT_RXPACKETS),(unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
-                         (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED));
+                         (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED),
+                         hq_wifi_dma_refused());
                 view.notice=stall_text;last_ui=0;
                 if(now-stall_since>=8000 && duration>0 && hq_auto_resume) {
                     *seek_to=start+(int)(played_samples/RATE);
@@ -522,10 +526,11 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             // Flight recorder (diagnostic): the relay logs this line, so the second before
             // a hang is on record even when the DSi can no longer show anything.
             feedback_size+=snprintf(feedback+feedback_size,sizeof(feedback)-feedback_size,
-                "DBG a7 %lu fifo %04X main %u/%u rx %u.%u/%u got %u rel %u aud %u st %u/%u/%u cn %u wd %08lX mr %u wifi %d rx %lu tx %lu lost %lu rej %lu resets %u\n",
+                "DBG a7 %lu fifo %04X main %u/%u rx %u.%u/%u got %u rel %u aud %u st %u/%u/%u cn %u wd %08lX mr %u mw %u wifi %d rx %lu tx %lu lost %lu rej %lu resets %u\n",
                 (unsigned long)arm7_beat_read(),(unsigned)REG_IPC_FIFO_CR,main_phase,main_beat,rx_phase,rx_sub,rx_beat,
                 received,released,audio_count,hq_net_stack_peak(1),hq_net_stack_peak(2),rx_peak,
                 hq_canary_check(&(unsigned){0},&(uint32_t){0}),(unsigned long)hq_canary_owner(),macread_rejected,
+                macwrite_rejected(),
                 Wifi_AssocStatus(),(unsigned long)Wifi_GetStats(WSTAT_RXPACKETS),(unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
                 (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED),
                 hq_wifi_resets);
@@ -575,11 +580,11 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
     if(*seek_to<0)hq_video_reset();
     if(failed && !rx_guard_word) {
         int assoc=Wifi_AssocStatus();
-        snprintf(error_text,error_size,"Stream interrupted. Wi-Fi %s, rx %lu tx %lu, lost %lu rej %lu, guard %u.",
+        snprintf(error_text,error_size,"Stream interrupted. Wi-Fi %s, rx %lu tx %lu, lost %lu rej %lu, dma mr %u mw %u.",
                  assoc>=0 && assoc<=ASSOCSTATUS_CANNOTCONNECT?ASSOCSTATUS_STRINGS[assoc]:"?",
                  (unsigned long)Wifi_GetStats(WSTAT_RXPACKETS),(unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
                  (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST),(unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED),
-                 macread_rejected);
+                 macread_rejected,macwrite_rejected());
         return 0;
     }
     if(failed)return 0;

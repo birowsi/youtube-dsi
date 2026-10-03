@@ -203,10 +203,11 @@ static unsigned wifi_resets;
 static char wifi_before_reset[120];
 static int reconnect_wifi(void) {
     int assoc = Wifi_AssocStatus();
-    snprintf(wifi_before_reset, sizeof(wifi_before_reset), "Wi-Fi was %s, rx %lu tx %lu lost %lu rej %lu",
+    snprintf(wifi_before_reset, sizeof(wifi_before_reset), "Wi-Fi was %s, rx %lu tx %lu lost %lu rej %lu dma %u",
              assoc >= 0 && assoc <= ASSOCSTATUS_CANNOTCONNECT ? ASSOCSTATUS_STRINGS[assoc] : "?",
              (unsigned long)Wifi_GetStats(WSTAT_RXPACKETS), (unsigned long)Wifi_GetStats(WSTAT_TXPACKETS),
-             (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST), (unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED));
+             (unsigned long)Wifi_GetStats(WSTAT_RXQUEUEDLOST), (unsigned long)Wifi_GetStats(WSTAT_TXQUEUEDREJECTED),
+             hq_wifi_dma_refused());
     wifi_resets++;
     hq_wifi_resets = wifi_resets;
     ui_status("Now Playing", "Reconnecting Wi-Fi...", wifi_before_reset, NULL);

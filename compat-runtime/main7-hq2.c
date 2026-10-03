@@ -93,6 +93,40 @@ void __wrap_Wifi_MACRead(u16 *dest, u32 MAC_Base, u32 MAC_Offset, int length)
     __real_Wifi_MACRead(dest, MAC_Base, MAC_Offset, length);
 }
 
+// DSWiFi's FIFO handler calls Wifi_Update() for every packet the ARM9 queues, and
+// libnds runs FIFO handlers with interrupts enabled (IME=1). The VBlank handler and
+// the Wi-Fi interrupt (TX/RX complete) then ran DSWiFi's update and TX flush in the
+// middle of it. Wifi_TxArm9QueueFlush() reads the next TX size outside its critical
+// section: when the nested call had already sent that packet, the outer call read
+// the empty slot (size 0), made a 0-count DMA (65536 halfwords over all of MAC RAM)
+// and left the TX read index 4 bytes off, so no ARM9 packet was sent again. The
+// network stopped (no ACK, no ping) while the radio stayed associated.
+// The VBlank and Wi-Fi interrupt handlers already run with IME=0; this makes the FIFO
+// call the same. Linked with --wrap=Wifi_Update.
+void __real_Wifi_Update(void);
+
+void __wrap_Wifi_Update(void)
+{
+    int ime = enterCriticalSection();
+    __real_Wifi_Update();
+    leaveCriticalSection(ime);
+}
+
+// Same guard for TX: a 0 length would again be a 65536-halfword DMA over MAC RAM.
+// Linked with --wrap=Wifi_MACWrite; the count reaches the ARM9 next to the heartbeat.
+void __real_Wifi_MACWrite(const u16 *src, u32 MAC_Base, int length);
+static volatile u32 hq2_macwrite_rejected;
+
+void __wrap_Wifi_MACWrite(const u16 *src, u32 MAC_Base, int length)
+{
+    if (length <= 0)
+    {
+        hq2_macwrite_rejected++;
+        return;
+    }
+    __real_Wifi_MACWrite(src, MAC_Base, length);
+}
+
 static void hq2_refresh_status(void)
 {
     if (!isDSiMode())
@@ -187,7 +221,10 @@ int main(void)
         static u32 beat;
         beat++;
         if (hq2_beat)
-            *hq2_beat = beat;
+        {
+            hq2_beat[0] = beat;
+            hq2_beat[1] = hq2_macwrite_rejected;
+        }
         if (beat % 60 == 1)
             hq2_refresh_status();
     }

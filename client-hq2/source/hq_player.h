@@ -15,6 +15,8 @@ void hq_watch_end(void);
 extern int hq_auto_resume, hq_resumed_after_stall;
 extern unsigned hq_wifi_resets;   // Wi-Fi rejoins after the network stopped (flight recorder)
 extern u32 hq_battery_raw;   // getBatteryLevel() value from the ARM7, 0xFFFFFFFF unknown
+// Unsafe DSWiFi MAC RAM DMA lengths the ARM7 refused (read + write); 0 when healthy.
+unsigned hq_wifi_dma_refused(void);
 // Crash screen that never dereferences the crashed stack; shows memory around r0/r4.
 void hq_crash_handler(void);
 // Threads created through cothread_create (net_stacks.c): count and deepest stack use.
