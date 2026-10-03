@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import logging
 import math
 import re
@@ -47,6 +48,9 @@ def ydl_options(**extra):
         "quiet": True, "no_warnings": False, "noplaylist": True,
         "socket_timeout": 20, "retries": 1, "extractor_retries": 1,
         "js_runtimes": {"node": {}},
+        # yt-dlp asks YouTube in English by default, so videos whose creators added
+        # translated titles came back in English. YTDSI_LANG (default ko) sets it.
+        "extractor_args": {"youtube": {"lang": [os.environ.get("YTDSI_LANG", "ko")]}},
     }
     options.update(extra)
     return options
