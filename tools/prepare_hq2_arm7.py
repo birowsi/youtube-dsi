@@ -3,7 +3,8 @@
 The ARM7 reads both I2C registers in its main loop with interrupts disabled, once
 a second, so the reads cannot interleave with libnds' own I2C use in interrupt
 handlers. A request on FIFO_USER_08 is answered at once from the cached values:
-    bits 0-7 volume (0-31), bits 8-15 battery (getBatteryLevel), bit 16 valid.
+    bits 0-7 volume (0-31), bits 8-15 battery (getBatteryLevel), bit 16 valid,
+    bits 17-31 how many unsafe Wifi_MACRead() lengths were rejected.
 The ARM9 never waits for an answer. The ARM9 also sends (as an address message on the
 same channel) a word in main RAM that the ARM7 main loop increments every VBlank; the
 ARM9 watchdog reads it to tell a dead ARM7 from a blocked FIFO. (An earlier version
@@ -37,6 +38,24 @@ static void volume_request(u32 value, void *userdata)
     fifoSendValue32(FIFO_VOLUME, hq2_status);
 }
 
+// DSWiFi's Wifi_MACRead() passes the length to DMA unchecked: count = (length+1)/2.
+// A zero-length received frame makes the count 0, which the DMA treats as 65536
+// halfwords (128 KB), and a negative length is worse. On hardware this wiped the
+// ARM9 heap right after DSWiFi's RX buffer (thread contexts and stacks) and froze
+// or crashed playback after seconds to minutes. Linked with --wrap=Wifi_MACRead.
+void __real_Wifi_MACRead(u16 *dest, u32 MAC_Base, u32 MAC_Offset, int length);
+static volatile u32 hq2_macread_rejected;
+
+void __wrap_Wifi_MACRead(u16 *dest, u32 MAC_Base, u32 MAC_Offset, int length)
+{
+    if (length <= 0 || length > 2400)
+    {
+        hq2_macread_rejected++;
+        return;
+    }
+    __real_Wifi_MACRead(dest, MAC_Base, MAC_Offset, length);
+}
+
 static void hq2_refresh_status(void)
 {
     if (!isDSiMode())
@@ -46,7 +65,8 @@ static void hq2_refresh_status(void)
     u32 volume = i2cReadRegister(I2C_PM, I2CREGPM_VOL) & 0xFF;
     u32 battery = getBatteryLevel() & 0xFF;
     leaveCriticalSection(ime);
-    hq2_status = volume | (battery << 8) | (1u << 16);
+    u32 rejected = hq2_macread_rejected > 0x7FFF ? 0x7FFF : hq2_macread_rejected;
+    hq2_status = volume | (battery << 8) | (1u << 16) | (rejected << 17);
 }
 
 int main(void)

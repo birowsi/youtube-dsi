@@ -15,7 +15,7 @@ arm-none-eabi-gcc -mthumb -mcpu=arm7tdmi -O2 -ffunction-sections -fdata-sections
   -I"$BLOCKSDS/libs/maxmod/include" -c main7-hq2.c -o main7-hq2.o
 arm-none-eabi-gcc -mthumb -mcpu=arm7tdmi -specs="$PWD/arm7.specs" \
   -L"$BLOCKSDS/libs/libnds/lib" -L"$BLOCKSDS/libs/dswifi/lib" \
-  -L"$BLOCKSDS/libs/maxmod/lib" -Wl,-Map,arm7-hq2.map \
+  -L"$BLOCKSDS/libs/maxmod/lib" -Wl,-Map,arm7-hq2.map -Wl,--wrap=Wifi_MACRead \
   -o arm7-hq2.elf main7-hq2.o -Wl,--start-group -lnds7 -ldswifi7 -lmm7 -lc -Wl,--end-group
 cd ../client-hq2
 make -B NAME=YouTubeDSiHQ2 DEFINES="-DCOMPAT_WIFI -DQUALITY_STREAM" \

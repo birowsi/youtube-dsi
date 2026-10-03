@@ -46,6 +46,7 @@ static unsigned volume_asked;
 // in its main loop. Nothing waits for it: a blocking getBatteryLevel() in the UI was
 // where playback hung once the ARM7/FIFO stalled.
 u32 hq_battery_raw=0xFFFFFFFFu;
+static unsigned macread_rejected;  // unsafe DSWiFi DMA lengths the ARM7 refused
 // Incremented by the ARM7 main loop every VBlank (address sent once); alone in a cache line.
 static volatile uint32_t arm7_beat[8] __attribute__((aligned(32)));
 static int arm7_beat_sent;
@@ -56,6 +57,7 @@ static void volume_poll(unsigned now) {
         if(value&(1u<<16)) {
             volume_level=(value&0xFF)<=31?(int)(value&0xFF):-1;
             hq_battery_raw=(value>>8)&0xFF;
+            macread_rejected=value>>17;
         }
     }
     if(!arm7_beat_sent) { arm7_beat_sent=1;fifoSendAddress(FIFO_VOLUME,(void*)arm7_beat); }
@@ -497,10 +499,10 @@ int hq_playback(int fd,char *error,unsigned size,const uint8_t *title_bitmap,con
             // Flight recorder (diagnostic): the relay logs this line, so the second before
             // a hang is on record even when the DSi can no longer show anything.
             feedback_size+=snprintf(feedback+feedback_size,sizeof(feedback)-feedback_size,
-                "DBG a7 %lu fifo %04X main %u/%u rx %u.%u/%u got %u rel %u aud %u st %u/%u/%u cn %u wd %08lX\n",
+                "DBG a7 %lu fifo %04X main %u/%u rx %u.%u/%u got %u rel %u aud %u st %u/%u/%u cn %u wd %08lX mr %u\n",
                 (unsigned long)arm7_beat_read(),(unsigned)REG_IPC_FIFO_CR,main_phase,main_beat,rx_phase,rx_sub,rx_beat,
                 received,released,audio_count,hq_net_stack_peak(1),hq_net_stack_peak(2),rx_peak,
-                hq_canary_check(&(unsigned){0},&(uint32_t){0}),(unsigned long)hq_canary_owner());
+                hq_canary_check(&(unsigned){0},&(uint32_t){0}),(unsigned long)hq_canary_owner(),macread_rejected);
             feedback_sent=0;last_feedback=now;
         }
         if(!eof && feedback_sent<feedback_size) {
